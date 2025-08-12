@@ -3,52 +3,10 @@ import subprocess
 import re
 import sys
 
-GRUB_MAIN_FILE = '/etc/default/grub'
-GRUB_D_DIR = '/etc/default/grub.d'
-VFIO_GRUB_FILE = os.path.join(GRUB_D_DIR, '99-cloudrift.cfg')
+
 INITRAMFS_MODULES_FILE = '/etc/initramfs-tools/modules'
 VFIO_CONF_FILE = '/etc/modprobe.d/vfio.conf'
 
-
-def read_options_from_file(file_path, param_name):
-    all_options = []
-    with open(file_path, 'r') as f:
-        for line in f:
-            if param_name in line:
-                match = re.search(param_name + r'="([^"]*)"', line)
-                if match:
-                    all_options.extend(match.group(1).split())
-    return all_options
-
-def get_existing_grub_parameters(param_name):
-    """
-    Reads the param_name from /etc/default/grub and any
-    overrides in /etc/default/grub.d.
-
-    Returns:
-        A string containing all existing kernel parameters.
-    """
-    all_options = []
-
-    # Read from the main GRUB file
-    try:
-        all_options = read_options_from_file(GRUB_MAIN_FILE, param_name)
-    except FileNotFoundError:
-        print(f"Warning: {GRUB_MAIN_FILE} not found. Starting with an empty command line.")
-
-    # Read from override files in grub.d
-    if os.path.exists(GRUB_D_DIR):
-        for filename in sorted(os.listdir(GRUB_D_DIR)):
-            if filename.endswith('.cfg'):
-                filepath = os.path.join(GRUB_D_DIR, filename)
-                try:
-                    all_options.extend(read_options_from_file(filepath, param_name))
-                except IOError as e:
-                    print(f"Warning: Could not read {filepath}: {e}")
-
-    # Deduplicate and return as a list
-    unique_options = sorted(list(set(all_options)))
-    return unique_options
 
 def get_gpu_pci_ids():
     """
@@ -116,35 +74,6 @@ def add_virtualization_options(pci_ids, iommu_type, existing_options: Dict[str, 
     return existing_options
     
 
-
-def create_grub_override(grub_options: Dict[str, Any]):
-    """
-    Creates a new GRUB configuration file in /etc/default/grub.d with the
-    necessary kernel parameters, appending to existing ones.
-
-    Args:
-        pci_ids: A list of "vendor:device" strings for the GPUs.
-        iommu_type: 'intel_iommu=on' or 'amd_iommu=on'.
-    """
-
-    # grub_d_content = f'GRUB_CMDLINE_LINUX_DEFAULT="{final_options_str}"\n'
-
-    grub_d_content = "\n".join([f'{key}="{grub_options[key]}"' for key in grub_options])
-
-    print(f"Creating override file {VFIO_GRUB_FILE}...")
-    print(f"Adding line: {grub_d_content}")
-
-    if not os.path.exists(GRUB_D_DIR):
-        os.makedirs(GRUB_D_DIR)
-
-    try:
-        with open(VFIO_GRUB_FILE, 'w') as f:
-            f.write(grub_d_content)
-        print("GRUB override file created successfully.")
-    except IOError as e:
-        print(f"Error writing to {VFIO_GRUB_FILE}: {e}")
-
-
 def update_initramfs_modules():
     """
     Adds VFIO modules to /etc/initramfs-tools/modules if they don't exist.
@@ -195,24 +124,8 @@ def create_vfio_conf():
         print(f"Error writing to {conf_file}: {e}")
 
 
-def update_system():
-    """
-    Runs the necessary system commands and prompts for a reboot.
-    """
-    print("\nRunning system update commands...")
-    try:
-        subprocess.run(['sudo', 'update-initramfs', '-u', '-k', 'all'], check=True)
-        subprocess.run(['sudo', 'update-grub'], check=True)
-        print("System updated successfully.")
 
-    except subprocess.CalledProcessError as e:
-        print(f"Error executing command: {e}")
-    except FileNotFoundError as e:
-        print(
-            f"Error: Command not found. Please ensure 'update-initramfs', 'update-grub', and 'reboot' are in your PATH. {e}")
-
-
-def setup_virtualization():
+def setup_virtualization(existing_options: Dict[str, Any]):
     """
     Main function to orchestrate the script's execution.
     """
@@ -248,14 +161,10 @@ def setup_virtualization():
 
     # Perform configuration steps
 
-    existing_options = get_existing_grub_parameters('GRUB_CMDLINE_LINUX_DEFAULT')
     grub_options = add_virtualization_options(existing_options)
-    create_grub_override(pci_ids, iommu_type)
+    create_grub_override(grub_options)
     update_initramfs_modules()
     create_vfio_conf()
-
-    # Run update commands
-    update_system()
 
     # After reboot, run this to check the status
     # check_vfio_driver()

@@ -24,10 +24,6 @@ def run(cmd, check=True, capture_output=False, quiet_stderr=False):
         kwargs["stderr"] = subprocess.DEVNULL
     return subprocess.run(cmd, check=check, **kwargs)
 
-def require_root():
-    if os.geteuid() != 0:
-        print("This script must be run as root (e.g., with sudo).", file=sys.stderr)
-        sys.exit(1)
 
 def apt_install():
     print("Updating apt and installing packages...")
@@ -76,8 +72,7 @@ def find_unused_whole_disks(add_dev_prefix=False):
             disks.append(f"/dev/{name}" if add_dev_prefix else name)
     return disks
 
-def main():
-    require_root()
+def configure_disks():
 
     # Validate dependencies we directly call
     for bin_name in ("lsblk", "systemctl", "bash"):
@@ -107,5 +102,3 @@ def main():
         joined = ",".join(disks)
         print(f'Running ./many_disks.sh "{joined}"')
 
-if __name__ == "__main__":
-    main()

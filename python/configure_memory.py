@@ -47,10 +47,10 @@ def allocate_hugepages(num_hugepages):
         print(f"Error allocating huge pages. Return code: {e.returncode}")
         print(f"STDERR: {e.stderr}")
         print("Please check if you have enough free memory or try a smaller number.")
-        sys.exit(1)
+        raise e
 
 
-def add_hugepages_to_grub_options(grub_options: Dict[str, Any], num_hugepages, enable_5level_paging=False):
+def add_hugepages_to_grub_options(grub_options: Dict[str, Any], num_hugepages, enable_5level_paging=False) -> Dict[str, Any]:
     cmdline_linux_options = grub_options.get('GRUB_CMDLINE_LINUX', '').split()
     cmdline_linux_default_options = grub_options.get('GRUB_CMDLINE_LINUX_DEFAULT', '').split()
     # Add the new hugepage configuration
@@ -71,7 +71,7 @@ def add_hugepages_to_grub_options(grub_options: Dict[str, Any], num_hugepages, e
 
 
 
-def enable_5level_paging():
+def supports_5level_paging():
     """
     Checks for 5-level paging support and prompts the user to enable it.
     """
@@ -130,30 +130,12 @@ def persist_mount(mount_point):
         sys.exit(1)
 
 
-def reboot_and_verify():
-    """
-    Prompts the user to reboot and provides verification instructions.
-    """
-    print("\n--- Reboot and Verify ---")
-    print("The configuration is complete. You need to reboot for the changes to take effect.")
-    print("After rebooting, you can verify the configuration by running the following commands:")
-    print("  grep -i huge /proc/meminfo")
-    print("  grep hugetlbfs /proc/mounts")
-    print("\nReboot now? (y/n)")
-    if input().lower() == 'y':
-        print("Rebooting...")
-        run_command("sudo reboot")
-    else:
-        print("Please reboot at your convenience to apply the changes.")
 
 
-def main():
+def configure_memory(existing_options: Dict[str, Any]):
     """
     Main function to orchestrate the huge page configuration.
     """
-    if os.geteuid() != 0:
-        print("This script requires root privileges. Please run with sudo.")
-        sys.exit(1)
 
     print("--- Huge Page Configuration Script ---")
 
@@ -198,7 +180,10 @@ def main():
             # This is a change from the user's instructions to make the script more robust.
             # The temporary allocation is mainly for testing.
 
-            allocate_hugepages(num_hugepages)
+            try:
+                allocate_hugepages(num_hugepages)
+            except Exception:
+                continue
             get_hugepage_info()
 
             break
@@ -207,12 +192,12 @@ def main():
 
     # 3. Make Huge Pages Persistent
     enable_5level = False
-    if enable_5level_paging():
+    if supports_5level_paging():
         print("\nDo you want to enable 5-level paging? (y/n)")
         if input().lower() == 'y':
             enable_5level = True
 
-    update_grub_for_hugepages(num_hugepages, enable_5level_paging=enable_5level)
+    existing_options = add_hugepages_to_grub_options(existing_options, num_hugepages, enable_5level_paging=enable_5level)
 
     # 5. Mount Huge Page Table
     mount_point = mount_hugepage_table()
@@ -220,9 +205,4 @@ def main():
     # 6. Persist the Mount on Reboot
     persist_mount(mount_point)
 
-    # 7. Reboot and Verify
-    reboot_and_verify()
-
-
-if __name__ == "__main__":
-    main()
+    return existing_options

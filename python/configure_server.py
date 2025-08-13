@@ -6,10 +6,20 @@ import subprocess
 from typing import Dict, Any
 from setup_virtualization import add_virtualization_options
 from configure_memory import configure_memory
+from nvidia import remove_nvidia_driver, check_nvidia
+from configure_disks import configure_disks
 
 GRUB_MAIN_FILE = '/etc/default/grub'
 GRUB_D_DIR = '/etc/default/grub.d'
 VFIO_GRUB_FILE = os.path.join(GRUB_D_DIR, '99-cloudrift.cfg')
+
+
+REQUIRED_PACKAGES = [
+    "qemu-kvm",
+    "libvirt-daemon-system",
+    "genisoimage",
+    "whois",
+]
 
 
 def read_options_from_file(file_path, param_name):
@@ -126,20 +136,21 @@ def configure_server():
     print("This script will configure your system for server use.")
     print("It adds the necessary kernel parameters to /etc/default/grub.d/99-cloudrift.cfg, /etc/initramfs-tools/modules, and /etc/modprobe.d/vfio.conf.")
 
-    # Get user confirmation
-    choice = input("Do you want to proceed? (y/n): ")
-    if choice.lower() != 'y':
-        print("Script aborted by user.")
-        sys.exit(0)
 
+    if check_nvidia():
+        print("NVIDIA driver is in use. Attempting to remove it.")
+        remove_nvidia_driver()
+
+    apt_install(REQUIRED_PACKAGES)
 
     # Perform configuration steps
     existing_options = {}
     existing_options['GRUB_CMDLINE_LINUX_DEFAULT'] = get_existing_grub_parameters('GRUB_CMDLINE_LINUX_DEFAULT')
     existing_options['GRUB_CMDLINE_LINUX'] = get_existing_grub_parameters('GRUB_CMDLINE_LINUX')
-    
+
     grub_options = add_virtualization_options(existing_options)
     grub_options = configure_memory(grub_options)
+    configure_disks()
     create_grub_override(grub_options)
 
     # Run update commands

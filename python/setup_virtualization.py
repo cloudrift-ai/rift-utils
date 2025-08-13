@@ -3,9 +3,41 @@ import subprocess
 import re
 import sys
 
+import json
+import os
+import shutil
+import sys
+from pathlib import Path
+
 
 INITRAMFS_MODULES_FILE = '/etc/initramfs-tools/modules'
 VFIO_CONF_FILE = '/etc/modprobe.d/vfio.conf'
+
+QEMU_CONF = Path("/etc/libvirt/qemu.conf")
+
+
+
+
+
+def ensure_qemu_conf_lines():
+    print(f"Ensuring user/group lines in {QEMU_CONF} ...")
+    QEMU_CONF.parent.mkdir(parents=True, exist_ok=True)
+    contents = QEMU_CONF.read_text() if QEMU_CONF.exists() else ""
+    desired = 'user = "root"\n' 'group = "root"\n'
+    # Append only if not already present
+    if 'user = "root"' not in contents or 'group = "root"' not in contents:
+        with QEMU_CONF.open("a") as f:
+            f.write(desired)
+        print("Appended user/group configuration.")
+    else:
+        print("User/group configuration already present; skipping.")
+
+def restart_libvirtd():
+    svc = "libvirtd"
+    print(f"Restarting {svc} service...")
+    run(["systemctl", "restart", svc])
+    run(["systemctl", "is-active", "--quiet", svc])
+    print(f"{svc} is active.")
 
 
 def get_gpu_pci_ids():
@@ -132,15 +164,9 @@ def setup_virtualization(existing_options: Dict[str, Any]):
     if os.geteuid() != 0:
         print("This script must be run with sudo.")
         sys.exit(1)
-
-    print("This script will configure your system for VFIO passthrough.")
-    print("It will modify /etc/default/grub, /etc/initramfs-tools/modules, and /etc/modprobe.d/vfio.conf.")
-
-    # Get user confirmation
-    choice = input("Do you want to proceed? (y/n): ")
-    if choice.lower() != 'y':
-        print("Script aborted by user.")
-        sys.exit(0)
+    
+    ensure_qemu_conf_lines()
+    restart_libvirtd()
 
     # Determine IOMMU type
     iommu_type = 'intel_iommu=on'

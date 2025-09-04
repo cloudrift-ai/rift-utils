@@ -1,4 +1,3 @@
-# 1) Drop-in that appends your params
 cat >/etc/default/grub.d/98-extra-cmdline.cfg <<'EOF'
 EXTRA_CMDLINE="module_blacklist=nvidia_drm,nvidia_modeset nouveau.modeset=0 pci=realloc pci=pcie_bus_perf"
 GRUB_CMDLINE_LINUX_DEFAULT="${GRUB_CMDLINE_LINUX_DEFAULT:+$GRUB_CMDLINE_LINUX_DEFAULT }$EXTRA_CMDLINE"
@@ -26,6 +25,3 @@ grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=ubunt
 update-initramfs -u -k all
 
 update-grub
-
-#sed -i 's|set prefix=(\$root)'\''/grub'\''|set prefix=(\$root)'\''/boot/grub'\''|' /boot/efi/EFI/ubuntu/grub.cfg
-

@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 
 import os
 import re
@@ -159,6 +160,5 @@ def configure_server():
     # Reboot server to apply changes
     reboot_server()
 
-
-
-
+if __name__ == "__main__":
+    configure_server()

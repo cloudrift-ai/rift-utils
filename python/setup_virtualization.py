@@ -8,16 +8,13 @@ import os
 import shutil
 import sys
 from pathlib import Path
+from typing import Dict, Any
 
 
 INITRAMFS_MODULES_FILE = '/etc/initramfs-tools/modules'
 VFIO_CONF_FILE = '/etc/modprobe.d/vfio.conf'
 
 QEMU_CONF = Path("/etc/libvirt/qemu.conf")
-
-
-
-
 
 def ensure_qemu_conf_lines():
     print(f"Ensuring user/group lines in {QEMU_CONF} ...")

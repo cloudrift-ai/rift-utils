@@ -7,7 +7,7 @@ def check_nvidia():
     Check if nvidia driver is installed
     """
     
-    output, _, return_code = run("lsmod | grep nvidia")
+    output, _, return_code = run("lsmod | grep nvidia", shell=True, capture_output=True)
     if return_code == 0 and output:
         print("NVIDIA driver is in use.")
     else:
@@ -26,9 +26,9 @@ def remove_nvidia_driver():
         
         # Remove NVIDIA driver and associated packages
         print("Removing NVIDIA packages...")
-        run("apt-get remove --purge '^nvidia-.*'")
-        run("autoremove")
-        
+        run(["apt-get", "remove", "--purge", "^nvidia-.*"])
+        run(["apt-get", "autoremove"])
+
         # Blacklist the nouveau driver
         print("Adding 'nouveau' to /etc/modules...")
         with open("/etc/modules", "a") as f:
@@ -36,20 +36,20 @@ def remove_nvidia_driver():
 
         # Clean up X11 configuration
         print("Removing X11 configuration files...")
-        run("rm /etc/X11/xorg.conf")
-        run("rm -rf /etc/X11/xorg.conf")
+        run(["rm", "/etc/X11/xorg.conf"])
+        run(["rm", "-rf", "/etc/X11/xorg.conf"])
 
         # Run the NVIDIA uninstaller (if it exists)
         print("Running NVIDIA uninstaller...")
-        run("/usr/bin/nvidia-uninstall")
+        run(["/usr/bin/nvidia-uninstall"])
 
         # Clean up modprobe configurations
         print("Removing modprobe configuration files...")
-        run("rm -rf /etc/modprobe.d/nvidia*.conf")
-        run("rm -rf /lib/modprobe.d/nvidia*.conf")
+        run(["rm", "-rf", "/etc/modprobe.d/nvidia*.conf"])
+        run(["rm", "-rf", "/lib/modprobe.d/nvidia*.conf"])
 
         print("Rebooting machine now...")
-        run("reboot")
+        run(["reboot"])
     else:
         print("NVIDIA driver does not appear to be in use, or the command failed to run.")
         print(f"lsmod output: {output}")

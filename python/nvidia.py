@@ -7,7 +7,7 @@ def check_nvidia():
     Check if nvidia driver is installed
     """
     
-    output, _, return_code = run("lsmod | grep nvidia", shell=True, capture_output=True)
+    output, _, return_code = run("lsmod | grep nvidia", shell=True, capture_output=True, check=False)
     if return_code == 0 and output:
         print("NVIDIA driver is in use.")
     else:

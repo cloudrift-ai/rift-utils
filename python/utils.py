@@ -13,6 +13,6 @@ def run(cmd, check=True, capture_output=False, quiet_stderr=False, shell=False):
     return stdout, result.stderr if quiet_stderr else None, result.returncode
 
 def apt_install(packages):
-    print("Updating apt and installing packages...")
+    print(f"Updating apt and installing packages {packages}...")
     run(["apt", "update"])
     run(["apt", "install", "-y", *packages])

@@ -1,6 +1,8 @@
 from .cmd import BaseCmd
 from pathlib import Path
 from .utils import run
+from typing import Any, Dict
+
 QEMU_CONF = Path("/etc/libvirt/qemu.conf")
 
 def ensure_qemu_conf_lines() -> bool:
@@ -34,7 +36,7 @@ class ConfigureLibvirtCmd(BaseCmd):
     def description(self) -> str:
         return "Sets up libvirt."
 
-    def execute(self) -> bool:
+    def execute(self, env: Dict[str, Any]) -> bool:
         if ensure_qemu_conf_lines():
             restart_libvirtd()
         return True

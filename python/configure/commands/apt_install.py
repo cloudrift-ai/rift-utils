@@ -1,7 +1,7 @@
 
 
 import subprocess
-from typing import List
+from typing import Any, Dict, List
 from .cmd import BaseCmd
 from .utils import run
 
@@ -16,8 +16,8 @@ class AptInstallCmd(BaseCmd):
     
     def __init__(self, packages: List[str]):
         self.packages = packages
-    
-    def execute(self) -> bool:
+
+    def execute(self, env: Dict[str, Any]) -> bool:
         try:
             run(["apt-get", "update"])
             run(["apt-get", "install", "-y"] + self.packages)

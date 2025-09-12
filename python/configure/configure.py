@@ -5,12 +5,15 @@ import re
 import sys
 import subprocess
 from typing import Dict, Any
-from commands.setup_virtualization import add_virtualization_options
+from commands.setup_virtualization import setup_virtualization
 from commands.configure_memory import configure_memory
 from commands.nvidia import RemoveNvidiaDriverCmd, remove_nvidia_driver, check_nvidia
 from commands.configure_disks import configure_disks
 from commands.apt_install import AptInstallCmd
 from commands.configure_libvirt import ConfigureLibvirtCmd
+from commands.configure_grub import ReadGrubCmd, GetIommuTypeCmd, GetGpuPciIdsCmd, AddGrubVirtualizationOptionsCmd
+from commands.configure_initramfs import UpdateInitramfsModulesCmd
+from commands.configure_modprobe import CreateVfioConfCmd
 
 GRUB_MAIN_FILE = '/etc/default/grub'
 GRUB_D_DIR = '/etc/default/grub.d'
@@ -151,7 +154,7 @@ def configure_server():
     existing_options['GRUB_CMDLINE_LINUX_DEFAULT'] = get_existing_grub_parameters('GRUB_CMDLINE_LINUX_DEFAULT')
     existing_options['GRUB_CMDLINE_LINUX'] = get_existing_grub_parameters('GRUB_CMDLINE_LINUX')
 
-    grub_options = add_virtualization_options(existing_options)
+    grub_options = setup_virtualization(existing_options)
     grub_options = configure_memory(grub_options)
     configure_disks()
     create_grub_override(grub_options)
@@ -166,6 +169,12 @@ NODE_COMMANDS = [
     RemoveNvidiaDriverCmd(),
     AptInstallCmd(REQUIRED_PACKAGES),
     ConfigureLibvirtCmd(),
+    ReadGrubCmd(),
+    GetIommuTypeCmd(),
+    GetGpuPciIdsCmd(),
+    AddGrubVirtualizationOptionsCmd(),
+    UpdateInitramfsModulesCmd(),
+    CreateVfioConfCmd(),
 ]
 
 def configure_node():
@@ -195,6 +204,8 @@ def configure_node():
     print("-" * 60)
     print()
 
+    env = {}  # Shared environment dictionary for commands
+
     # Execute commands with enhanced output
     for i, command in enumerate(NODE_COMMANDS, start=1):
         print(f"🚀 Step {i}/{total_commands}: {command.name()}")
@@ -202,7 +213,7 @@ def configure_node():
         print(f"⏳ Executing...")
         
         try:
-            success = command.execute()
+            success = command.execute(env)
             if success:
                 print(f"✅ Step {i}/{total_commands} completed successfully!")
             else:

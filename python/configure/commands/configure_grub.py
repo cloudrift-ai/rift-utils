@@ -1,0 +1,175 @@
+from .cmd import BaseCmd
+from typing import Dict, Any
+import os
+import re
+import subprocess
+
+GRUB_MAIN_FILE = '/etc/default/grub'
+GRUB_D_DIR = '/etc/default/grub.d'
+VFIO_GRUB_FILE = os.path.join(GRUB_D_DIR, '99-cloudrift.cfg')
+
+
+def read_options_from_file(file_path, param_name):
+    all_options = []
+    with open(file_path, 'r') as f:
+        for line in f:
+            if param_name in line:
+                match = re.search(param_name + r'="([^"]*)"', line)
+                if match:
+                    all_options.extend(match.group(1).split())
+    return all_options
+
+def get_existing_grub_parameters(param_name):
+    """
+    Reads the param_name from /etc/default/grub and any
+    overrides in /etc/default/grub.d.
+
+    Returns:
+        A string containing all existing kernel parameters.
+    """
+    all_options = []
+
+    # Read from the main GRUB file
+    try:
+        all_options = read_options_from_file(GRUB_MAIN_FILE, param_name)
+    except FileNotFoundError:
+        print(f"Warning: {GRUB_MAIN_FILE} not found. Starting with an empty command line.")
+
+    # Read from override files in grub.d
+    if os.path.exists(GRUB_D_DIR):
+        for filename in sorted(os.listdir(GRUB_D_DIR)):
+            if filename.endswith('.cfg'):
+                filepath = os.path.join(GRUB_D_DIR, filename)
+                try:
+                    all_options.extend(read_options_from_file(filepath, param_name))
+                except IOError as e:
+                    print(f"Warning: Could not read {filepath}: {e}")
+
+    # Deduplicate and return as a list
+    unique_options = sorted(list(set(all_options)))
+    return unique_options
+
+class ReadGrubCmd(BaseCmd):
+    """ Command to read existing GRUB parameters. """
+
+    def name(self) -> str:
+        return "Read GRUB Parameters"
+    
+    def description(self) -> str:
+        return "Reads existing GRUB parameters from the system."
+
+    def execute(self, env: Dict[str, Any]) -> bool:
+        env['GRUB_CMDLINE_LINUX_DEFAULT'] = get_existing_grub_parameters('GRUB_CMDLINE_LINUX_DEFAULT')
+        env['GRUB_CMDLINE_LINUX'] = get_existing_grub_parameters('GRUB_CMDLINE_LINUX')
+        print(f"Existing GRUB_CMDLINE_LINUX_DEFAULT: {env['GRUB_CMDLINE_LINUX_DEFAULT']}")
+        print(f"Existing GRUB_CMDLINE_LINUX: {env['GRUB_CMDLINE_LINUX']}")
+        return True
+
+class GetIommuTypeCmd(BaseCmd):
+    """ Command to get the IOMMU type. """
+
+    def name(self) -> str:
+        return "Get IOMMU Type"
+    
+    def description(self) -> str:
+        return "Determines the IOMMU type of the system."
+
+    def execute(self, env: Dict[str, Any]) -> bool:
+        iommu_type = 'intel_iommu=on'
+        if 'AMD' in open('/proc/cpuinfo').read():
+            iommu_type = 'amd_iommu=on'
+        print(f"Detected CPU type, using '{iommu_type}'.")
+        env['IOMMU_TYPE'] = iommu_type
+        return True
+
+class GetGpuPciIdsCmd(BaseCmd):
+    """ Command to get GPU PCI IDs. """
+
+    def name(self) -> str:
+        return "Get GPU PCI IDs"
+    
+    def description(self) -> str:
+        return "Retrieves the PCI IDs of the GPUs in the system."
+
+    def execute(self, env: Dict[str, Any]) -> bool:
+        try:
+            lspci_output = subprocess.check_output(['lspci', '-nnk']).decode('utf-8')
+            nvidia_lines = [line for line in lspci_output.splitlines() if 'NVIDIA Corporation' in line]
+
+            if not nvidia_lines:
+                print("No NVIDIA GPUs found.")
+                return False
+
+            pci_ids = []
+            for line in nvidia_lines:
+                match = re.search(r'\[([0-9a-fA-F]{4}):([0-9a-fA-F]{4})\]', line)
+                if match:
+                    vendor_id = match.group(1)
+                    device_id = match.group(2)
+                    pci_ids.append(f"{vendor_id}:{device_id}")
+
+            env['GPU_PCI_IDS'] = sorted(list(set(pci_ids)))
+            print(f"Detected GPU PCI IDs: {env['GPU_PCI_IDS']}")
+            return True
+        except subprocess.CalledProcessError as e:
+            print(f"Error running lspci: {e}")
+            return False
+
+
+class AddGrubVirtualizationOptionsCmd(BaseCmd):
+    """ Command to add virtualization options to GRUB. """
+
+    def name(self) -> str:
+        return "Add Virtualization Options to GRUB"
+    
+    def description(self) -> str:
+        return "Adds necessary virtualization options to GRUB configuration."
+
+    def execute(self, env: Dict[str, Any]) -> bool:
+        if 'IOMMU_TYPE' not in env or 'GPU_PCI_IDS' not in env or 'GRUB_CMDLINE_LINUX_DEFAULT' not in env:
+            print("Error: Missing required environment variables.")
+            return False
+
+        iommu_type = env['IOMMU_TYPE']
+        pci_ids = env['GPU_PCI_IDS']
+
+        new_options = [
+            'iommu=pt',
+            'pci=realloc',
+            'pcie_aspm=off',
+            iommu_type,
+            'nomodeset',
+            'video=efifb:off'
+        ]
+
+        vfio_ids_str = ','.join(pci_ids)
+        if vfio_ids_str:
+            new_options.append(f'vfio-pci.ids={vfio_ids_str}')
+            new_options.append('modprobe.blacklist=nouveau,nvidia,nvidiafb,snd_hda_intel')
+        else:
+            print("Warning: No PCI IDs provided for VFIO binding. Skipping VFIO options.")
+
+        # Only add options that are not already present
+        grub_cmdline = env['GRUB_CMDLINE_LINUX_DEFAULT']
+        if isinstance(grub_cmdline, list):
+            final_options_list = grub_cmdline.copy()
+        else:
+            # If it's a string, split it into a list
+            final_options_list = grub_cmdline.split() if grub_cmdline else []
+
+        for opt in new_options:
+            # Simple check to avoid duplicates for non-vfio options
+            if not any(opt.split('=')[0] in existing_opt for existing_opt in final_options_list):
+                final_options_list.append(opt)
+
+        # Handle the vfio-pci.ids and modprobe.blacklist options carefully
+        # We remove the old ones if they exist and add our new, complete ones
+        final_options_list = [opt for opt in final_options_list if not opt.startswith('vfio-pci.ids=')]
+        final_options_list = [opt for opt in final_options_list if not opt.startswith('modprobe.blacklist=')]
+        if vfio_ids_str:
+            final_options_list.append(f'vfio-pci.ids={vfio_ids_str}')
+            final_options_list.append('modprobe.blacklist=nouveau,nvidia,nvidiafb,snd_hda_intel')
+
+        env['GRUB_CMDLINE_LINUX_DEFAULT'] = ' '.join(final_options_list)
+        print(f"Updated GRUB_CMDLINE_LINUX_DEFAULT: {env['GRUB_CMDLINE_LINUX_DEFAULT']}")
+        return True

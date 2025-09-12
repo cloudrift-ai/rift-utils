@@ -184,10 +184,11 @@ def setup_virtualization(existing_options: Dict[str, Any]):
 
     # Perform configuration steps
 
-    grub_options = add_virtualization_options(existing_options)
-    create_grub_override(grub_options)
+    grub_options = add_virtualization_options(pci_ids, iommu_type, existing_options)
+    #create_grub_override(grub_options)
     update_initramfs_modules()
     create_vfio_conf()
+    return grub_options
 
     # After reboot, run this to check the status
     # check_vfio_driver()

@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from typing import Any, Dict
 
 class BaseCmd(ABC):
     """ Base class for all commands."""
@@ -10,6 +11,6 @@ class BaseCmd(ABC):
         return "No description provided."
 
     @abstractmethod
-    def execute(self) -> bool:
+    def execute(self, env: Dict[str, Any]) -> bool:
         return False
 

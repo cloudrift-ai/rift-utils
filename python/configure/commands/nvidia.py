@@ -1,5 +1,6 @@
 
 import subprocess
+from typing import Any, Dict
 from .cmd import BaseCmd
 from .utils import run
 
@@ -63,6 +64,6 @@ class RemoveNvidiaDriverCmd(BaseCmd):
     def description(self) -> str:
         return "Checks for and removes NVIDIA drivers if they are installed."
 
-    def execute(self) -> bool:
+    def execute(self, env: Dict[str, Any]) -> bool:
         remove_nvidia_driver()
         return True

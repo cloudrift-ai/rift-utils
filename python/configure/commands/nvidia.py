@@ -1,6 +1,7 @@
 
 import subprocess
-from utils import run
+from .cmd import BaseCmd
+from .utils import run
 
 def check_nvidia():
     """
@@ -52,4 +53,16 @@ def remove_nvidia_driver():
         run(["reboot"])
     else:
         print("NVIDIA driver does not appear to be in use, or the command failed to run.")
-        print(f"lsmod output: {output}")
+
+class RemoveNvidiaDriverCmd(BaseCmd):
+    """ Command to remove NVIDIA driver. """
+
+    def name(self) -> str:
+        return "Remove NVIDIA Driver"
+    
+    def description(self) -> str:
+        return "Checks for and removes NVIDIA drivers if they are installed."
+
+    def execute(self) -> bool:
+        remove_nvidia_driver()
+        return True

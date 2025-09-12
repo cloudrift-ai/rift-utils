@@ -8,6 +8,8 @@ from setup_virtualization import add_virtualization_options
 from configure_memory import configure_memory
 from nvidia import remove_nvidia_driver, check_nvidia
 from configure_disks import configure_disks
+from utils import apt_install, update_system, reboot_server, create_grub_override
+from setup_virtualization import setup_virtualization
 
 GRUB_MAIN_FILE = '/etc/default/grub'
 GRUB_D_DIR = '/etc/default/grub.d'
@@ -150,6 +152,7 @@ def configure_server():
 
     grub_options = add_virtualization_options(existing_options)
     grub_options = configure_memory(grub_options)
+    grub_options = setup_virtualization(grub_options)
     configure_disks()
     create_grub_override(grub_options)
 
@@ -159,6 +162,10 @@ def configure_server():
     # Reboot server to apply changes
     reboot_server()
 
+
+if __name__ == "__main__":
+    configure_server()
+    
 
 
 

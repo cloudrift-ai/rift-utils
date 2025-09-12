@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+from utils import run
+import json
+import shutil
+import sys
 
 def find_unused_whole_disks(add_dev_prefix=False):
     # Use lsblk JSON; suppress stderr warnings like "not a block device"

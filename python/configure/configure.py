@@ -4,6 +4,7 @@ import os
 import re
 import sys
 import subprocess
+import argparse
 from typing import Dict, Any
 from commands.utils import run
 from commands.configure_memory import configure_memory
@@ -60,6 +61,73 @@ NODE_COMMANDS = [
     ConfigureDisksCmd(),
     CreateGrubOverrideCmd()
 ]
+
+def list_commands():
+    """
+    List all available configuration commands.
+    """
+    print("=" * 60)
+    print("📋 AVAILABLE CONFIGURATION COMMANDS")
+    print("=" * 60)
+    
+    for i, command in enumerate(NODE_COMMANDS, start=1):
+        print(f"  {i}. {command.name()}")
+        print(f"     └─ {command.description()}")
+    print("=" * 60)
+    print(f"Total: {len(NODE_COMMANDS)} commands available")
+
+def execute_specific_command(command_identifier):
+    """
+    Execute a specific command by index or name.
+    """
+    if os.geteuid() != 0:
+        print("This script must be run with sudo.")
+        sys.exit(1)
+
+    env = {}  # Shared environment dictionary
+    command_to_execute = None
+    command_index = None
+
+    # Try to parse as index first
+    try:
+        index = int(command_identifier) - 1  # Convert to 0-based index
+        if 0 <= index < len(NODE_COMMANDS):
+            command_to_execute = NODE_COMMANDS[index]
+            command_index = index + 1
+    except ValueError:
+        # Not a number, try to find by name
+        for i, command in enumerate(NODE_COMMANDS):
+            if command.name().lower() == command_identifier.lower():
+                command_to_execute = command
+                command_index = i + 1
+                break
+
+    if command_to_execute is None:
+        print(f"❌ Command '{command_identifier}' not found.")
+        print("Use --list to see available commands.")
+        sys.exit(1)
+
+    print("=" * 60)
+    print("🔧 EXECUTING SPECIFIC COMMAND")
+    print("=" * 60)
+    print(f"🚀 Executing command {command_index}: {command_to_execute.name()}")
+    print(f"📝 Description: {command_to_execute.description()}")
+    print(f"⏳ Executing...")
+    
+    try:
+        success = command_to_execute.execute(env)
+        if success:
+            print(f"✅ Command completed successfully!")
+        else:
+            print(f"❌ Command failed!")
+            sys.exit(1)
+    except Exception as e:
+        print(f"❌ Command failed with exception!")
+        print(f"💥 Error: {str(e)}")
+        sys.exit(1)
+    
+    print("🎉 Command execution completed!")
+    print("=" * 60)
 
 def configure_node():
     """
@@ -118,5 +186,42 @@ def configure_node():
 
     reboot_server()
 
+def main():
+    """
+    Parse command line arguments and execute appropriate action.
+    """
+    parser = argparse.ArgumentParser(
+        description="Configure your system for server use with QEMU/KVM virtualization.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python configure.py                    # Run all configuration commands
+  python configure.py --list            # List all available commands
+  python configure.py --command 3       # Execute command #3 only
+  python configure.py --command "Remove Nvidia Driver"  # Execute by name
+        """
+    )
+    
+    parser.add_argument(
+        "--list", 
+        action="store_true",
+        help="List all available configuration commands"
+    )
+    
+    parser.add_argument(
+        "--command", 
+        metavar="ID_OR_NAME",
+        help="Execute only the specified command (by number or name)"
+    )
+    
+    args = parser.parse_args()
+    
+    if args.list:
+        list_commands()
+    elif args.command:
+        execute_specific_command(args.command)
+    else:
+        configure_node()
+
 if __name__ == "__main__":
-    configure_node()
+    main()

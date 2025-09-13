@@ -12,7 +12,7 @@ class AptInstallCmd(BaseCmd):
         return "Apt Install Packages"
     
     def description(self) -> str:
-        return "Installs specified packages using apt."
+        return f"Installs packages using apt ({', '.join(self.packages)})"
     
     def __init__(self, packages: List[str]):
         self.packages = packages

@@ -1,5 +1,15 @@
 # CloudRift Utilities
 
+This repository contains a collection of scripts to configure a server for use with the CloudRift datacenter service.
+
+
+## Server Setup Script
+
+This script does a setup of virtualization, memory configuration, and disk configuration for the CloudRift datacenter service.
+
+**Usage:**  
+`sudo python3 python/configure/configure.py`
+
 ## Client Setup Script
 
 This script facilitates machine setup for the CloudRift datacenter service.

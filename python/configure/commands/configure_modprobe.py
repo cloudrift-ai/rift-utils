@@ -1,6 +1,6 @@
 import os
 from typing import Any, Dict
-from python.configure.commands.cmd import BaseCmd
+from .cmd import BaseCmd
 
 def create_vfio_conf():
     """

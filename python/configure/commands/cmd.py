@@ -13,4 +13,3 @@ class BaseCmd(ABC):
     @abstractmethod
     def execute(self, env: Dict[str, Any]) -> bool:
         return False
-

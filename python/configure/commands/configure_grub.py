@@ -1,4 +1,5 @@
 from .cmd import BaseCmd
+from .utils import run
 from typing import Dict, Any
 import os
 import re
@@ -8,6 +9,13 @@ GRUB_MAIN_FILE = '/etc/default/grub'
 GRUB_D_DIR = '/etc/default/grub.d'
 VFIO_GRUB_FILE = os.path.join(GRUB_D_DIR, '99-cloudrift.cfg')
 
+def update_grub():
+    """
+    Updates GRUB configuration by running 'update-grub'.
+    """
+    print("Updating GRUB configuration...")
+    run(['sudo', 'update-grub'], check=True)
+    print("GRUB configuration updated.")
 
 def read_options_from_file(file_path, param_name):
     all_options = []
@@ -49,6 +57,61 @@ def get_existing_grub_parameters(param_name):
     unique_options = sorted(list(set(all_options)))
     return unique_options
 
+def create_grub_override(grub_options: Dict[str, Any]) -> bool:
+    """
+    Creates a new GRUB configuration file in /etc/default/grub.d with the
+    necessary kernel parameters, appending to existing ones.
+
+    Args:
+        grub_options: A dictionary of kernel parameters with options to add.
+    """
+
+    if os.path.exists(VFIO_GRUB_FILE):
+        print(f"Warning: {VFIO_GRUB_FILE} already exists and will be overwritten.")
+        # Check existing options in the file
+        existing_options = {}
+        if os.path.exists(VFIO_GRUB_FILE):
+            try:
+                with open(VFIO_GRUB_FILE, 'r') as f:
+                    for line in f:
+                        match = re.search(r'([A-Z_]+)="([^"]*)"', line)
+                        if match:
+                            existing_options[match.group(1)] = match.group(2)
+                
+                # Compare existing with new options
+                if existing_options == grub_options:
+                    print("GRUB options are already up to date. No changes needed.")
+                    return False
+                else:
+                    print("Existing options differ from new options:")
+                    for k in set(existing_options.keys()) | set(grub_options.keys()):
+                        if k in existing_options and k in grub_options:
+                            print(f"  {k}: '{existing_options[k]}' -> '{grub_options[k]}'")
+                        elif k in grub_options:
+                            print(f"  {k}: (none) -> '{grub_options[k]}'")
+                        else:
+                            print(f"  {k}: '{existing_options[k]}' -> (removed)")
+            except IOError as e:
+                print(f"Warning: Could not read existing file {VFIO_GRUB_FILE}: {e}")
+
+    # grub_d_content = f'GRUB_CMDLINE_LINUX_DEFAULT="{final_options_str}"\n'
+
+    grub_d_content = "\n".join([f'{key}="{grub_options[key]}"' for key in grub_options])
+
+    print(f"Creating override file {VFIO_GRUB_FILE}...")
+    print(f"Adding line: {grub_d_content}")
+
+    if not os.path.exists(GRUB_D_DIR):
+        os.makedirs(GRUB_D_DIR)
+
+    try:
+        with open(VFIO_GRUB_FILE, 'w') as f:
+            f.write(grub_d_content)
+        print("GRUB override file created successfully.")
+        return True
+    except IOError as e:
+        print(f"Error writing to {VFIO_GRUB_FILE}: {e}")
+        return False
 class ReadGrubCmd(BaseCmd):
     """ Command to read existing GRUB parameters. """
 
@@ -173,3 +236,30 @@ class AddGrubVirtualizationOptionsCmd(BaseCmd):
         env['GRUB_CMDLINE_LINUX_DEFAULT'] = ' '.join(final_options_list)
         print(f"Updated GRUB_CMDLINE_LINUX_DEFAULT: {env['GRUB_CMDLINE_LINUX_DEFAULT']}")
         return True
+
+class CreateGrubOverrideCmd(BaseCmd):
+    """ Command to create GRUB override file. """
+
+    def name(self) -> str:
+        return "Create GRUB Override"
+    
+    def description(self) -> str:
+        return "Creates a GRUB override file with the updated kernel parameters."
+
+    def execute(self, env: Dict[str, Any]) -> bool:
+        if 'GRUB_CMDLINE_LINUX_DEFAULT' not in env or 'GRUB_CMDLINE_LINUX' not in env:
+            print("Error: Missing required environment variables.")
+            return False
+
+        grub_options = {
+            'GRUB_CMDLINE_LINUX_DEFAULT': env['GRUB_CMDLINE_LINUX_DEFAULT'],
+            'GRUB_CMDLINE_LINUX': env['GRUB_CMDLINE_LINUX']
+        }
+
+        try:
+            if create_grub_override(grub_options):
+                update_grub()
+            return True
+        except Exception as e:
+            print(f"Error creating GRUB override: {e}")
+            return False

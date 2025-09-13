@@ -1,10 +1,17 @@
-
 from typing import Any, Dict
 
-from python.configure.commands.cmd import BaseCmd
+from .cmd import BaseCmd
+from .utils import run
 
+def update_initramfs():
+    """
+    Updates the initramfs to include any changes made to modules.
+    """
+    print("Updating initramfs...")
+    run(['sudo', 'update-initramfs', '-u', '-k', 'all'], check=True)
+    print("Initramfs updated.")
 
-def update_initramfs_modules():
+def update_initramfs_modules() -> bool:
     """
     Adds VFIO modules to /etc/initramfs-tools/modules if they don't exist.
     """
@@ -26,13 +33,17 @@ def update_initramfs_modules():
 
         if updated:
             print("VFIO modules added to /etc/initramfs-tools/modules.")
+            return True
         else:
             print("VFIO modules are already present in /etc/initramfs-tools/modules.")
+            return False
 
     except FileNotFoundError:
         print(f"Error: {modules_file} not found.")
     except IOError as e:
         print(f"Error writing to {modules_file}: {e}")
+
+    return False
 
 class UpdateInitramfsModulesCmd(BaseCmd):
     """ Command to update initramfs modules. """
@@ -45,7 +56,8 @@ class UpdateInitramfsModulesCmd(BaseCmd):
 
     def execute(self, env: Dict[str, Any]) -> bool:
         try:
-            update_initramfs_modules()
+            if update_initramfs_modules():
+                update_initramfs()
             return True
         except Exception as e:
             print(f"Error updating initramfs modules: {e}")

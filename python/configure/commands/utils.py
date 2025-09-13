@@ -24,7 +24,6 @@ def add_mp_to_fstab(fstab_line, mount_point) -> bool:
     """
     Adds the mount point to /etc/fstab to persist across reboots.
     """
-    fstab_line = f"none {mount_point} hugetlbfs pagesize=1G 0 0\n"
     try:
         # Check if the line already exists
         with open("/etc/fstab", 'r') as f:

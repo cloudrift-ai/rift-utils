@@ -6,7 +6,6 @@ import sys
 import subprocess
 from typing import Dict, Any
 from commands.utils import run
-from commands.setup_virtualization import setup_virtualization
 from commands.configure_memory import configure_memory
 from commands.nvidia import RemoveNvidiaDriverCmd, remove_nvidia_driver, check_nvidia
 from commands.configure_disks import configure_disks

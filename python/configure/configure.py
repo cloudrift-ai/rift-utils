@@ -43,7 +43,7 @@ def reboot_server():
     print("\nReboot now? (y/N)")
     if (input() or 'n').lower() == 'y':
         print("Rebooting...")
-        run("sudo reboot")
+        run(["reboot"])
     else:
         print("Please reboot at your convenience to apply the changes.")
 

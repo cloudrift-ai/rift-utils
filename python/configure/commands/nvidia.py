@@ -2,7 +2,7 @@
 import subprocess
 from typing import Any, Dict
 from .cmd import BaseCmd
-from .utils import run
+from .utils import run, reboot_prompt
 
 def check_nvidia():
     """
@@ -50,8 +50,7 @@ def remove_nvidia_driver():
         run(["rm", "-rf", "/etc/modprobe.d/nvidia*.conf"])
         run(["rm", "-rf", "/lib/modprobe.d/nvidia*.conf"])
 
-        print("Rebooting machine now...")
-        run(["reboot"])
+        reboot_prompt()
     else:
         print("NVIDIA driver does not appear to be in use, or the command failed to run.")
 

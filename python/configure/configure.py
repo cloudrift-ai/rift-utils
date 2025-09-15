@@ -6,7 +6,7 @@ import sys
 import subprocess
 import argparse
 from typing import Dict, Any
-from commands.utils import run
+from commands.utils import run, reboot_prompt
 from commands.configure_memory import configure_memory
 from commands.nvidia import RemoveNvidiaDriverCmd, remove_nvidia_driver, check_nvidia
 from commands.configure_disks import configure_disks
@@ -40,12 +40,7 @@ def reboot_server():
     print("After rebooting, you can verify the configuration by running the following commands:")
     print("  grep -i huge /proc/meminfo")
     print("  grep hugetlbfs /proc/mounts")
-    print("\nReboot now? (y/N)")
-    if (input() or 'n').lower() == 'y':
-        print("Rebooting...")
-        run(["reboot"])
-    else:
-        print("Please reboot at your convenience to apply the changes.")
+    reboot_prompt()
 
 NODE_COMMANDS = [
     CheckVirtualizationCmd(),

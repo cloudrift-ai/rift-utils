@@ -15,6 +15,14 @@ def run(cmd, check=True, capture_output=False, quiet_stderr=False, shell=False):
     stdout = result.stdout.strip() if capture_output and result.stdout else ""
     return stdout, result.stderr if quiet_stderr else None, result.returncode
 
+def reboot_prompt():
+    print("\nReboot now? (y/N)")
+    if (input() or 'n').lower() == 'y':
+        print("Rebooting...")
+        run(["reboot"])
+    else:
+        print("Please reboot at your convenience to apply the changes.")
+
 def apt_install(packages):
     print(f"Updating apt and installing packages {packages}...")
     run(["apt", "update"])

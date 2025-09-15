@@ -41,3 +41,21 @@ class ConfigureLibvirtCmd(BaseCmd):
             restart_libvirtd()
         return True
     
+class CheckVirtualizationCmd(BaseCmd):
+    """ Command to check if virtualization is supported. """
+
+    def name(self) -> str:
+        return "Check Virtualization Support"
+
+    def description(self) -> str:
+        return "Checks if the CPU supports virtualization."
+
+    def execute(self, env: Dict[str, Any]) -> bool:
+        print("Checking for virtualization support...")
+        cpuinfo, _, _ = run(["grep", "-E", "vmx|svm", "/proc/cpuinfo"], capture_output=True, quiet_stderr=True)
+        if cpuinfo:
+            print("Virtualization support detected.")
+            return True
+        else:
+            print("No virtualization support detected. Exiting.")
+            return False

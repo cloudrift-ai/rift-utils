@@ -11,7 +11,7 @@ from commands.configure_memory import configure_memory
 from commands.nvidia import RemoveNvidiaDriverCmd, remove_nvidia_driver, check_nvidia
 from commands.configure_disks import configure_disks
 from commands.apt_install import AptInstallCmd
-from commands.configure_libvirt import ConfigureLibvirtCmd
+from commands.configure_libvirt import ConfigureLibvirtCmd, CheckVirtualizationCmd
 from commands.configure_grub import ReadGrubCmd, GetIommuTypeCmd, GetGpuPciIdsCmd, AddGrubVirtualizationOptionsCmd, CreateGrubOverrideCmd
 from commands.configure_initramfs import UpdateInitramfsModulesCmd
 from commands.configure_modprobe import CreateVfioConfCmd
@@ -48,6 +48,7 @@ def reboot_server():
         print("Please reboot at your convenience to apply the changes.")
 
 NODE_COMMANDS = [
+    CheckVirtualizationCmd(),
     RemoveNvidiaDriverCmd(),
     AptInstallCmd(REQUIRED_PACKAGES),
     ConfigureLibvirtCmd(),

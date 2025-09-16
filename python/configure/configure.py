@@ -17,6 +17,7 @@ from commands.configure_initramfs import UpdateInitramfsModulesCmd
 from commands.configure_modprobe import CreateVfioConfCmd
 from commands.configure_memory import ConfigureMemoryCmd
 from commands.configure_disks import ConfigureDisksCmd
+from commands.configure_gpu_power import CreateGpuPowerUdevRuleCmd, CreateVfioPciPowerConfCmd, VerifyGpuPowerStateCmd, ConfigureGpuPowerCmd
 
 GRUB_MAIN_FILE = '/etc/default/grub'
 GRUB_D_DIR = '/etc/default/grub.d'
@@ -53,9 +54,11 @@ NODE_COMMANDS = [
     AddGrubVirtualizationOptionsCmd(),
     UpdateInitramfsModulesCmd(),
     CreateVfioConfCmd(),
+    ConfigureGpuPowerCmd(),  # Configure GPU power management (udev + modprobe)
     ConfigureMemoryCmd(),
     ConfigureDisksCmd(),
-    CreateGrubOverrideCmd()
+    CreateGrubOverrideCmd(),
+    VerifyGpuPowerStateCmd()  # Verify GPU power settings at the end
 ]
 
 def list_commands():

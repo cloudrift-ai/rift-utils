@@ -2,14 +2,29 @@ import os
 import subprocess
 import sys
 from typing import Dict, Any
+from .cmd import BaseCmd
+from .utils import run, add_mp_to_fstab
+
+def run_command(command):
+    shell = isinstance(command, str)
+    try:
+        out, _, _ = run(cmd=command, shell=shell, check=True, capture_output=True, quiet_stderr=True)
+        return out
+    except subprocess.CalledProcessError as e:
+        print(f"Error running command: '{command}'")
+        print(f"Return code: {e.returncode}")
+        print(f"STDOUT: {e.stdout}")
+        print(f"STDERR: {e.stderr}")
+        sys.exit(1)
 
 
-def run_command(command, shell=False):
+def run_command_old(command, shell=False):
     """
     Runs a shell command and returns the output.
     Exits the script if the command fails.
     """
     try:
+        print(f"Running command: {command}")
         if shell:
             result = subprocess.run(command, check=True, text=True, capture_output=True, shell=True)
         else:
@@ -42,7 +57,7 @@ def allocate_hugepages(num_hugepages):
     # This command requires sudo, so we use a different method.
     command = f'echo {num_hugepages} | sudo tee /sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages'
     try:
-        subprocess.run(command, check=True, text=True, shell=True)
+        run(command, check=True, shell=True)
         print(f"Successfully allocated {num_hugepages} huge pages.")
     except subprocess.CalledProcessError as e:
         print(f"Error allocating huge pages. Return code: {e.returncode}")
@@ -52,13 +67,16 @@ def allocate_hugepages(num_hugepages):
 
 
 def add_hugepages_to_grub_options(grub_options: Dict[str, Any], num_hugepages, enable_5level_paging=False) -> Dict[str, Any]:
-    cmdline_linux_options = grub_options.get('GRUB_CMDLINE_LINUX', '').split()
-    cmdline_linux_default_options = grub_options.get('GRUB_CMDLINE_LINUX_DEFAULT', '').split()
-    # Add the new hugepage configuration
-    cmdline_linux_options.append(f'default_hugepagesz=1G hugepagesz=1G hugepages={num_hugepages}')
+    opt = grub_options.get('GRUB_CMDLINE_LINUX', '')
+    cmdline_linux_options = opt.split() if isinstance(opt, str) else opt
+    opt = grub_options.get('GRUB_CMDLINE_LINUX_DEFAULT', '')
+    cmdline_linux_default_options = opt.split() if isinstance(opt, str) else opt
 
     # Remove any existing hugepage configuration
     cmdline_linux_options = [opt for opt in cmdline_linux_options if not opt.startswith(('default_hugepagesz', 'hugepagesz', 'hugepages'))]
+
+    # Add the new hugepage configuration
+    cmdline_linux_options.append(f'default_hugepagesz=1G hugepagesz=1G hugepages={num_hugepages}')
 
     if enable_5level_paging:
         cmdline_linux_default_options = [opt for opt in cmdline_linux_default_options if opt != 'la57']
@@ -110,28 +128,11 @@ def persist_mount(mount_point):
     """
     print("\n--- Making Mount Persistent with /etc/fstab ---")
     fstab_line = f"none {mount_point} hugetlbfs pagesize=1G 0 0\n"
-
-    try:
-        # Check if the line already exists
-        with open("/etc/fstab", 'r') as f:
-            if fstab_line in f.read():
-                print(f"Mount point '{mount_point}' already exists in /etc/fstab.")
-                return
-    except FileNotFoundError:
-        print("Error: /etc/fstab not found.")
-        sys.exit(1)
-
-    # Use sudo tee to append the line
-    try:
-        command = f'echo "{fstab_line}" | sudo tee -a /etc/fstab'
-        subprocess.run(command, check=True, text=True, shell=True)
+    if add_mp_to_fstab(fstab_line, mount_point):
         print(f"Successfully added '{fstab_line.strip()}' to /etc/fstab.")
-    except subprocess.CalledProcessError as e:
-        print(f"Error adding mount to /etc/fstab. Return code: {e.returncode}")
+    else:
+        print(f"Failed to add '{fstab_line.strip()}' to /etc/fstab.")
         sys.exit(1)
-
-
-
 
 def configure_memory(existing_options: Dict[str, Any]):
     """
@@ -142,7 +143,7 @@ def configure_memory(existing_options: Dict[str, Any]):
 
     # 1. Check Huge Page Support
     hugepage_info = get_hugepage_info()
-    if 'Hugepagesize' not in hugepage_info or '1048576 kB' not in hugepage_info.get('Hugepagesize'):
+    if 'Hugepagesize' not in hugepage_info:
         print("Warning: 1GB Hugepagesize not detected. Please ensure your kernel supports it.")
 
     # 2. Allocate Huge Pages
@@ -158,10 +159,14 @@ def configure_memory(existing_options: Dict[str, Any]):
         print("Script will exit.")
         return
 
+    recommended_vm_memory = total_ram_gb * 0.8
+    recommended_buffer = total_ram_gb * 0.05
+
     while True:
         try:
-            vm_memory_gb = int(input("\nEnter the total memory you want to dedicate to VMs (in GB): "))
-            buffer_gb = int(input("Enter the buffer size (in GB): "))
+            vm_memory_gb = int(input(f"\nEnter the total memory you want to dedicate to VMs (in GB) [{recommended_vm_memory}]: ") or recommended_vm_memory)
+            print(f"You entered: {vm_memory_gb}")
+            buffer_gb = int(input(f"Enter the buffer size (in GB) [{recommended_buffer}]: ") or recommended_buffer)
 
             if vm_memory_gb + buffer_gb > total_ram_gb:
                 print("Error: The requested memory exceeds total system RAM. Please enter a smaller value.")
@@ -183,7 +188,8 @@ def configure_memory(existing_options: Dict[str, Any]):
 
             try:
                 allocate_hugepages(num_hugepages)
-            except Exception:
+            except Exception as e:
+                print(f"Failed to allocate huge pages temporarily. Error: {e}")
                 continue
             get_hugepage_info()
 
@@ -194,16 +200,39 @@ def configure_memory(existing_options: Dict[str, Any]):
     # 3. Make Huge Pages Persistent
     enable_5level = False
     if supports_5level_paging():
-        print("\nDo you want to enable 5-level paging? (y/n)")
-        if input().lower() == 'y':
+        print("\nDo you want to enable 5-level paging? (Y/n)")
+        if (input() or 'y').lower() == 'y':
+            print("5-level paging will be enabled.")
             enable_5level = True
 
+    print("\nUpdating GRUB configuration...")
     existing_options = add_hugepages_to_grub_options(existing_options, num_hugepages, enable_5level_paging=enable_5level)
 
     # 5. Mount Huge Page Table
+    print("\nMounting huge page table...")
     mount_point = mount_hugepage_table()
 
     # 6. Persist the Mount on Reboot
+    print("\nMaking the mount persistent...")
     persist_mount(mount_point)
 
     return existing_options
+
+class ConfigureMemoryCmd(BaseCmd):
+    """ Command to configure huge pages. """
+
+    def name(self) -> str:
+        return "Configure Huge Pages"
+    
+    def description(self) -> str:
+        return "Configures 1GB huge pages for virtualization."
+
+    def execute(self, env: Dict[str, Any]) -> bool:
+        try:
+            configure_memory(env)
+            print(f"Updated GRUB_CMDLINE_LINUX_DEFAULT: {env['GRUB_CMDLINE_LINUX_DEFAULT']}")
+            print(f"Updated GRUB_CMDLINE_LINUX: {env['GRUB_CMDLINE_LINUX']}")
+            return True
+        except Exception as e:
+            print(f"Error configuring memory: {e}")
+            return False

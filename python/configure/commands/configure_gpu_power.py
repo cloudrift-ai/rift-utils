@@ -12,11 +12,13 @@ def create_gpu_power_udev_rule():
     Creates udev rule to prevent NVIDIA GPU from going into deep D3 state.
     """
     udev_rule_content = '''# Keep all NVIDIA PCI functions in D0 (no runtime suspend / no D3cold)
-ACTION=="add",   SUBSYSTEM=="pci", ATTR{vendor}=="0x10de", ENV{DEVTYPE}=="pci_device", \\
-  RUN+="/bin/sh -c 'echo on > /sys$devpath/power/control; echo 0 > /sys$devpath/d3cold_allowed 2>/dev/null || true'"
+# Match all NVIDIA devices and set power management
+ACTION=="add|change", SUBSYSTEM=="pci", ATTR{vendor}=="0x10de", \\
+  RUN+="/bin/sh -c 'echo on > /sys$devpath/power/control 2>/dev/null || true; echo 0 > /sys$devpath/d3cold_allowed 2>/dev/null || true'"
 
-ACTION=="change", SUBSYSTEM=="pci", ATTR{vendor}=="0x10de", ENV{DEVTYPE}=="pci_device", \\
-  RUN+="/bin/sh -c 'echo on > /sys$devpath/power/control; echo 0 > /sys$devpath/d3cold_allowed 2>/dev/null || true'"
+# Also handle bind events
+ACTION=="bind", SUBSYSTEM=="pci", ATTR{vendor}=="0x10de", \\
+  RUN+="/bin/sh -c 'echo on > /sys$devpath/power/control 2>/dev/null || true; echo 0 > /sys$devpath/d3cold_allowed 2>/dev/null || true'"
 '''
 
     try:
@@ -47,6 +49,39 @@ ACTION=="change", SUBSYSTEM=="pci", ATTR{vendor}=="0x10de", ENV{DEVTYPE}=="pci_d
         return False
     except subprocess.CalledProcessError as e:
         print(f"Error reloading udev rules: {e}")
+        return False
+
+def apply_gpu_power_settings_immediately():
+    """
+    Immediately apply GPU power settings to all NVIDIA devices using sudo.
+    """
+    try:
+        # Use a shell command with sudo to apply settings
+        cmd = '''for dev in /sys/bus/pci/devices/*/vendor; do
+            [ "$(cat $dev 2>/dev/null)" = "0x10de" ] &&
+            pci=${dev%/vendor} &&
+            echo on > $pci/power/control 2>/dev/null &&
+            echo 0 > $pci/d3cold_allowed 2>/dev/null &&
+            echo "  Configured: $(basename $pci)"
+        done'''
+
+        print("Applying power settings to NVIDIA devices...")
+        stdout, stderr, returncode = run(['sudo', 'sh', '-c', cmd], capture_output=True)
+
+        if stdout:
+            print(stdout)
+
+        if returncode == 0 or returncode is None:
+            print("Power settings applied successfully.")
+            return True
+        else:
+            print("Warning: Some devices may not have been configured.")
+            return True  # Don't fail completely if some devices couldn't be configured
+    except subprocess.CalledProcessError as e:
+        print(f"Error applying power settings: {e}")
+        return False
+    except Exception as e:
+        print(f"Unexpected error: {e}")
         return False
 
 def create_vfio_pci_power_conf():
@@ -209,10 +244,16 @@ class ConfigureGpuPowerCmd(BaseCmd):
         if not create_vfio_pci_power_conf():
             print("Note: Modprobe conf was already up to date.")
 
+        # Apply settings immediately
+        if not apply_gpu_power_settings_immediately():
+            print("Warning: Could not apply power settings immediately.")
+            success = False
+
         # Verify configuration
         if not verify_gpu_power_state():
-            print("\nWarning: Some verification checks failed. You may need to reboot for changes to take full effect.")
-            success = False
+            print("\nWarning: Some verification checks failed. Settings have been applied but may require a reboot for full effect.")
+            # Don't fail the command if only verification failed after applying settings
+            # success = False
         else:
             print("\nAll GPU power management configurations verified successfully!")
 

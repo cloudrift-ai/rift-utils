@@ -14,7 +14,7 @@ def update_grub():
     Updates GRUB configuration by running 'update-grub'.
     """
     print("Updating GRUB configuration...")
-    run(['sudo', 'update-grub'], check=True)
+    run(['update-grub'], check=True)
     print("GRUB configuration updated.")
 
 def read_options_from_file(file_path, param_name):

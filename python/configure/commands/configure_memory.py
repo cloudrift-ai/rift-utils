@@ -54,8 +54,8 @@ def allocate_hugepages(num_hugepages):
     Allocates the specified number of 1GB huge pages.
     """
     print(f"\n--- Allocating {num_hugepages} Huge Pages ---")
-    # This command requires sudo, so we use a different method.
-    command = f'echo {num_hugepages} | sudo tee /sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages'
+    # Write directly to sysfs to allocate hugepages
+    command = f'echo {num_hugepages} | tee /sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages'
     try:
         run(command, check=True, shell=True)
         print(f"Successfully allocated {num_hugepages} huge pages.")
@@ -118,8 +118,8 @@ def mount_hugepage_table():
     """
     print("\n--- Mounting Huge Page Table ---")
     mount_point = "/mnt/hugepages-1G"
-    run_command(f"sudo mkdir -p {mount_point}")
-    run_command(f"sudo mount -t hugetlbfs -o pagesize=1G none {mount_point}")
+    run_command(f"mkdir -p {mount_point}")
+    run_command(f"mount -t hugetlbfs -o pagesize=1G none {mount_point}")
     print("Verifying mount point...")
     run_command("grep hugetlbfs /proc/mounts")
     return mount_point

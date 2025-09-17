@@ -42,9 +42,9 @@ def add_mp_to_fstab(fstab_line, mount_point) -> bool:
         print("Error: /etc/fstab not found.")
         return False
 
-    # Use sudo tee to append the line
+    # Use tee to append the line
     try:
-        command = f'echo "{fstab_line}" | sudo tee -a /etc/fstab'
+        command = f'echo "{fstab_line}" | tee -a /etc/fstab'
         run(command, check=True, shell=True)
         print(f"Successfully added '{fstab_line.strip()}' to /etc/fstab.")
     except subprocess.CalledProcessError as e:

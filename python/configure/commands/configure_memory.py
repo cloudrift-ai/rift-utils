@@ -54,8 +54,8 @@ def allocate_hugepages(num_hugepages):
     Allocates the specified number of 1GB huge pages.
     """
     print(f"\n--- Allocating {num_hugepages} Huge Pages ---")
-    # This command requires sudo, so we use a different method.
-    command = f'echo {num_hugepages} | sudo tee /sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages'
+    # Write directly to sysfs to allocate hugepages
+    command = f'echo {num_hugepages} | tee /sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages'
     try:
         run(command, check=True, shell=True)
         print(f"Successfully allocated {num_hugepages} huge pages.")
@@ -72,19 +72,22 @@ def add_hugepages_to_grub_options(grub_options: Dict[str, Any], num_hugepages, e
     opt = grub_options.get('GRUB_CMDLINE_LINUX_DEFAULT', '')
     cmdline_linux_default_options = opt.split() if isinstance(opt, str) else opt
 
-    # Remove any existing hugepage configuration
+    # Remove any existing hugepage configuration from both GRUB_CMDLINE_LINUX and GRUB_CMDLINE_LINUX_DEFAULT
     cmdline_linux_options = [opt for opt in cmdline_linux_options if not opt.startswith(('default_hugepagesz', 'hugepagesz', 'hugepages'))]
+    cmdline_linux_default_options = [opt for opt in cmdline_linux_default_options if not opt.startswith(('default_hugepagesz', 'hugepagesz', 'hugepages'))]
 
-    # Add the new hugepage configuration
-    cmdline_linux_options.append(f'default_hugepagesz=1G hugepagesz=1G hugepages={num_hugepages}')
+    # Add the new hugepage configuration to GRUB_CMDLINE_LINUX_DEFAULT (not GRUB_CMDLINE_LINUX)
+    # This ensures it's applied to normal boot entries on Ubuntu
+    cmdline_linux_default_options.append(f'default_hugepagesz=1G')
+    cmdline_linux_default_options.append(f'hugepagesz=1G')
+    cmdline_linux_default_options.append(f'hugepages={num_hugepages}')
 
     if enable_5level_paging:
         cmdline_linux_default_options = [opt for opt in cmdline_linux_default_options if opt != 'la57']
-
         # Add the new la57 option
         cmdline_linux_default_options.append('la57')
-        grub_options['GRUB_CMDLINE_LINUX_DEFAULT'] = ' '.join(cmdline_linux_default_options)
 
+    grub_options['GRUB_CMDLINE_LINUX_DEFAULT'] = ' '.join(cmdline_linux_default_options)
     grub_options['GRUB_CMDLINE_LINUX'] = ' '.join(cmdline_linux_options)
     return grub_options
 
@@ -115,8 +118,8 @@ def mount_hugepage_table():
     """
     print("\n--- Mounting Huge Page Table ---")
     mount_point = "/mnt/hugepages-1G"
-    run_command(f"sudo mkdir -p {mount_point}")
-    run_command(f"sudo mount -t hugetlbfs -o pagesize=1G none {mount_point}")
+    run_command(f"mkdir -p {mount_point}")
+    run_command(f"mount -t hugetlbfs -o pagesize=1G none {mount_point}")
     print("Verifying mount point...")
     run_command("grep hugetlbfs /proc/mounts")
     return mount_point

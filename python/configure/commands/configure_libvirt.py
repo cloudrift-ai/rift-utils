@@ -7,17 +7,28 @@ QEMU_CONF = Path("/etc/libvirt/qemu.conf")
 
 def ensure_qemu_conf_lines() -> bool:
     print(f"Ensuring user/group lines in {QEMU_CONF} ...")
+
+    # Create directory if it doesn't exist
     QEMU_CONF.parent.mkdir(parents=True, exist_ok=True)
+
+    # Read current configuration
     contents = QEMU_CONF.read_text() if QEMU_CONF.exists() else ""
-    desired = 'user = "root"\n' 'group = "root"\n'
-    # Append only if not already present
-    if 'user = "root"' not in contents or 'group = "root"' not in contents:
+
+    # Check if user and group are already set
+    if 'user = "root"' in contents and 'group = "root"' in contents:
+        print("User/group configuration already present; skipping.")
+        return False
+
+    # Append user and group configuration
+    desired = 'user = "root"\ngroup = "root"\n'
+
+    try:
         with QEMU_CONF.open("a") as f:
             f.write(desired)
         print("Appended user/group configuration.")
         return True
-    else:
-        print("User/group configuration already present; skipping.")
+    except Exception as e:
+        print(f"Error updating qemu.conf: {e}")
         return False
 
 def restart_libvirtd():
@@ -26,6 +37,25 @@ def restart_libvirtd():
     run(["systemctl", "restart", svc])
     run(["systemctl", "is-active", "--quiet", svc])
     print(f"{svc} is active.")
+
+def verify_qemu_conf() -> bool:
+    """Verify that qemu.conf has the user and group settings."""
+    print("Verifying libvirt qemu.conf configuration...")
+
+    try:
+        contents = QEMU_CONF.read_text() if QEMU_CONF.exists() else ""
+
+        user_ok = 'user = "root"' in contents
+        group_ok = 'group = "root"' in contents
+
+        print(f"  {'✓' if user_ok else '✗'} User set to root")
+        print(f"  {'✓' if group_ok else '✗'} Group set to root")
+
+        return user_ok and group_ok
+
+    except Exception as e:
+        print(f"Error reading qemu.conf: {e}")
+        return False
 
 class ConfigureLibvirtCmd(BaseCmd):
     """ Command to configure libvirt for virtualization. """
@@ -37,9 +67,17 @@ class ConfigureLibvirtCmd(BaseCmd):
         return "Sets up libvirt."
 
     def execute(self, env: Dict[str, Any]) -> bool:
-        if ensure_qemu_conf_lines():
+        changes_made = ensure_qemu_conf_lines()
+        if changes_made:
             restart_libvirtd()
-        return True
+
+        # Verify the configuration
+        if verify_qemu_conf():
+            print("Libvirt configuration completed successfully.")
+            return True
+        else:
+            print("Warning: Libvirt configuration verification failed.")
+            return False
     
 class CheckVirtualizationCmd(BaseCmd):
     """ Command to check if virtualization is supported. """

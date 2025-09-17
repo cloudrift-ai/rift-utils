@@ -8,7 +8,7 @@ def update_initramfs():
     Updates the initramfs to include any changes made to modules.
     """
     print("Updating initramfs...")
-    run(['sudo', 'update-initramfs', '-u', '-k', 'all'], check=True)
+    run(['update-initramfs', '-u', '-k', 'all'], check=True)
     print("Initramfs updated.")
 
 def update_initramfs_modules() -> bool:

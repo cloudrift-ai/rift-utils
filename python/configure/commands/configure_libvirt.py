@@ -2,30 +2,77 @@ from .cmd import BaseCmd
 from pathlib import Path
 from .utils import run
 from typing import Any, Dict
+import subprocess
 
 QEMU_CONF = Path("/etc/libvirt/qemu.conf")
 
 def ensure_qemu_conf_lines() -> bool:
     print(f"Ensuring user/group lines in {QEMU_CONF} ...")
-    QEMU_CONF.parent.mkdir(parents=True, exist_ok=True)
-    contents = QEMU_CONF.read_text() if QEMU_CONF.exists() else ""
-    desired = 'user = "root"\n' 'group = "root"\n'
-    # Append only if not already present
-    if 'user = "root"' not in contents or 'group = "root"' not in contents:
-        with QEMU_CONF.open("a") as f:
-            f.write(desired)
-        print("Appended user/group configuration.")
-        return True
-    else:
+
+    try:
+        # Read current configuration with sudo
+        result = subprocess.run(['sudo', 'cat', str(QEMU_CONF)],
+                              capture_output=True, text=True, check=True)
+        contents = result.stdout
+    except subprocess.CalledProcessError:
+        print(f"Warning: Could not read {QEMU_CONF}.")
+        contents = ""
+
+    # Check if user and group are already set
+    if 'user = "root"' in contents and 'group = "root"' in contents:
         print("User/group configuration already present; skipping.")
+        return False
+
+    # Append user and group configuration
+    desired = '\nuser = "root"\ngroup = "root"\n'
+
+    try:
+        # Use sudo to append to the file
+        process = subprocess.Popen(['sudo', 'tee', '-a', str(QEMU_CONF)],
+                                 stdin=subprocess.PIPE,
+                                 stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE,
+                                 text=True)
+        stdout, stderr = process.communicate(input=desired)
+
+        if process.returncode == 0:
+            print("Appended user/group configuration.")
+            return True
+        else:
+            print(f"Error writing to qemu.conf: {stderr}")
+            return False
+
+    except Exception as e:
+        print(f"Error updating qemu.conf: {e}")
         return False
 
 def restart_libvirtd():
     svc = "libvirtd"
     print(f"Restarting {svc} service...")
-    run(["systemctl", "restart", svc])
-    run(["systemctl", "is-active", "--quiet", svc])
+    run(["sudo", "systemctl", "restart", svc])
+    run(["sudo", "systemctl", "is-active", "--quiet", svc])
     print(f"{svc} is active.")
+
+def verify_qemu_conf() -> bool:
+    """Verify that qemu.conf has the user and group settings."""
+    print("Verifying libvirt qemu.conf configuration...")
+
+    try:
+        result = subprocess.run(['sudo', 'cat', str(QEMU_CONF)],
+                              capture_output=True, text=True, check=True)
+        contents = result.stdout
+
+        user_ok = 'user = "root"' in contents
+        group_ok = 'group = "root"' in contents
+
+        print(f"  {'✓' if user_ok else '✗'} User set to root")
+        print(f"  {'✓' if group_ok else '✗'} Group set to root")
+
+        return user_ok and group_ok
+
+    except subprocess.CalledProcessError as e:
+        print(f"Error reading qemu.conf: {e}")
+        return False
 
 class ConfigureLibvirtCmd(BaseCmd):
     """ Command to configure libvirt for virtualization. """
@@ -37,9 +84,17 @@ class ConfigureLibvirtCmd(BaseCmd):
         return "Sets up libvirt."
 
     def execute(self, env: Dict[str, Any]) -> bool:
-        if ensure_qemu_conf_lines():
+        changes_made = ensure_qemu_conf_lines()
+        if changes_made:
             restart_libvirtd()
-        return True
+
+        # Verify the configuration
+        if verify_qemu_conf():
+            print("Libvirt configuration completed successfully.")
+            return True
+        else:
+            print("Warning: Libvirt configuration verification failed.")
+            return False
     
 class CheckVirtualizationCmd(BaseCmd):
     """ Command to check if virtualization is supported. """

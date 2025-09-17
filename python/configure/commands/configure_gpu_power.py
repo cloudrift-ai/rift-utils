@@ -10,6 +10,7 @@ MODPROBE_CONF_FILE = '/etc/modprobe.d/vfio-pci-power.conf'
 def create_gpu_power_udev_rule():
     """
     Creates udev rule to prevent NVIDIA GPU from going into deep D3 state.
+    Returns: 'created' if rule was created/updated, 'exists' if already correct, 'error' on failure.
     """
     udev_rule_content = '''# Keep all NVIDIA PCI functions in D0 (no runtime suspend / no D3cold)
 # Match all NVIDIA devices and set power management
@@ -28,7 +29,7 @@ ACTION=="bind", SUBSYSTEM=="pci", ATTR{vendor}=="0x10de", \\
                 existing_content = f.read()
                 if existing_content == udev_rule_content:
                     print(f"Udev rule {UDEV_RULE_FILE} already exists with correct content.")
-                    return False
+                    return 'exists'
 
         # Write the udev rule
         with open(UDEV_RULE_FILE, 'w') as f:
@@ -43,13 +44,13 @@ ACTION=="bind", SUBSYSTEM=="pci", ATTR{vendor}=="0x10de", \\
         run(['udevadm', 'trigger', '--subsystem-match=pci', '--attr-match=vendor=0x10de'], check=False)
         print("Triggered udev for existing NVIDIA devices.")
 
-        return True
+        return 'created'
     except IOError as e:
         print(f"Error writing udev rule to {UDEV_RULE_FILE}: {e}")
-        return False
+        return 'error'
     except subprocess.CalledProcessError as e:
         print(f"Error reloading udev rules: {e}")
-        return False
+        return 'error'
 
 def apply_gpu_power_settings_immediately():
     """
@@ -82,6 +83,7 @@ def apply_gpu_power_settings_immediately():
 def create_vfio_pci_power_conf():
     """
     Creates modprobe configuration to disable idle D3 for vfio-pci.
+    Returns: 'created' if conf was created/updated, 'exists' if already correct, 'error' on failure.
     """
     conf_content = "options vfio-pci disable_idle_d3=1\n"
 
@@ -92,17 +94,17 @@ def create_vfio_pci_power_conf():
                 existing_content = f.read()
                 if existing_content == conf_content:
                     print(f"Modprobe conf {MODPROBE_CONF_FILE} already exists with correct content.")
-                    return False
+                    return 'exists'
 
         # Write the modprobe conf
         with open(MODPROBE_CONF_FILE, 'w') as f:
             f.write(conf_content)
         print(f"Created/updated modprobe conf: {MODPROBE_CONF_FILE}")
 
-        return True
+        return 'created'
     except IOError as e:
         print(f"Error writing modprobe conf to {MODPROBE_CONF_FILE}: {e}")
-        return False
+        return 'error'
 
 def verify_gpu_power_state():
     """
@@ -183,12 +185,16 @@ class CreateGpuPowerUdevRuleCmd(BaseCmd):
         return "Creates udev rule to prevent NVIDIA GPUs from entering D3 power state."
 
     def execute(self, env: Dict[str, Any]) -> bool:
-        try:
-            create_gpu_power_udev_rule()
-            return True
-        except Exception as e:
-            print(f"Error creating GPU power udev rule: {e}")
+        result = create_gpu_power_udev_rule()
+        if result == 'error':
+            print("Failed to create GPU power udev rule.")
             return False
+        elif result == 'exists':
+            print("GPU power udev rule already configured.")
+            return True
+        else:  # 'created'
+            print("GPU power udev rule configured successfully.")
+            return True
 
 class CreateVfioPciPowerConfCmd(BaseCmd):
     """Command to create vfio-pci power configuration."""
@@ -200,12 +206,16 @@ class CreateVfioPciPowerConfCmd(BaseCmd):
         return "Creates modprobe configuration to disable idle D3 for vfio-pci."
 
     def execute(self, env: Dict[str, Any]) -> bool:
-        try:
-            create_vfio_pci_power_conf()
-            return True
-        except Exception as e:
-            print(f"Error creating vfio-pci power conf: {e}")
+        result = create_vfio_pci_power_conf()
+        if result == 'error':
+            print("Failed to create vfio-pci power configuration.")
             return False
+        elif result == 'exists':
+            print("VFIO-PCI power configuration already configured.")
+            return True
+        else:  # 'created'
+            print("VFIO-PCI power configuration created successfully.")
+            return True
 
 class VerifyGpuPowerStateCmd(BaseCmd):
     """Command to verify GPU power state configuration."""
@@ -229,13 +239,24 @@ class ConfigureGpuPowerCmd(BaseCmd):
         return "Configures udev rules and modprobe settings to prevent GPUs from entering D3 state."
 
     def execute(self, env: Dict[str, Any]) -> bool:
+        # Track if we had any errors
+        had_error = False
+
         # Create udev rule
-        if not create_gpu_power_udev_rule():
-            print("Note: Udev rule was already up to date or had minor issues.")
+        udev_result = create_gpu_power_udev_rule()
+        if udev_result == 'error':
+            print("Error: Failed to create udev rule.")
+            had_error = True
+        elif udev_result == 'exists':
+            print("Note: Udev rule was already configured.")
 
         # Create modprobe conf
-        if not create_vfio_pci_power_conf():
-            print("Note: Modprobe conf was already up to date.")
+        modprobe_result = create_vfio_pci_power_conf()
+        if modprobe_result == 'error':
+            print("Error: Failed to create modprobe configuration.")
+            had_error = True
+        elif modprobe_result == 'exists':
+            print("Note: Modprobe conf was already configured.")
 
         # Apply settings immediately (may show warnings but that's OK)
         apply_gpu_power_settings_immediately()
@@ -243,7 +264,10 @@ class ConfigureGpuPowerCmd(BaseCmd):
         # Verify configuration - this is the real test
         verification_passed = verify_gpu_power_state()
 
-        if verification_passed:
+        if had_error:
+            print("\nErrors occurred during configuration.")
+            return False
+        elif verification_passed:
             print("\nAll GPU power management configurations verified successfully!")
             return True
         else:

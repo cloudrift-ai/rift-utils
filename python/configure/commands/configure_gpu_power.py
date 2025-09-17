@@ -36,11 +36,11 @@ ACTION=="bind", SUBSYSTEM=="pci", ATTR{vendor}=="0x10de", \\
         print(f"Created/updated udev rule: {UDEV_RULE_FILE}")
 
         # Reload udev rules
-        run(['sudo', 'udevadm', 'control', '--reload'], check=True)
+        run(['udevadm', 'control', '--reload'], check=True)
         print("Reloaded udev rules.")
 
         # Trigger udev for existing devices
-        run(['sudo', 'udevadm', 'trigger', '--subsystem-match=pci', '--attr-match=vendor=0x10de'], check=False)
+        run(['udevadm', 'trigger', '--subsystem-match=pci', '--attr-match=vendor=0x10de'], check=False)
         print("Triggered udev for existing NVIDIA devices.")
 
         return True
@@ -53,15 +53,15 @@ ACTION=="bind", SUBSYSTEM=="pci", ATTR{vendor}=="0x10de", \\
 
 def apply_gpu_power_settings_immediately():
     """
-    Immediately apply GPU power settings to all NVIDIA devices using sudo.
+    Immediately apply GPU power settings to all NVIDIA devices.
     """
     try:
-        # Use a shell command with sudo to apply settings
+        # Use a shell command to apply settings
         # Single line command to avoid shell parsing issues
         cmd = 'for dev in /sys/bus/pci/devices/*/vendor; do [ "$(cat $dev 2>/dev/null)" = "0x10de" ] && pci=${dev%/vendor} && echo on > $pci/power/control 2>/dev/null && echo 0 > $pci/d3cold_allowed 2>/dev/null && echo "  Configured: $(basename $pci)"; done'
 
         print("Applying power settings to NVIDIA devices...")
-        stdout, stderr, returncode = run(['sudo', 'sh', '-c', cmd], capture_output=True, check=False)
+        stdout, stderr, returncode = run(['sh', '-c', cmd], capture_output=True, check=False)
 
         if stdout:
             print(stdout)

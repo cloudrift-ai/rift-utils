@@ -107,8 +107,76 @@ def create_raid_array(disks):
     cmd.extend(devices)
     run(cmd)
 
-def configure_disks():
+def configure_lvm_storage(vg_name: str, free_gb: float) -> None:
+    """
+    Configure storage using LVM free space.
 
+    Args:
+        vg_name: Volume group name with free space
+        free_gb: Amount of free space in GB
+    """
+    print(f"Using LVM free space: {free_gb:.1f}GB in volume group '{vg_name}'")
+
+    # Create logical volume
+    lv_path = create_lvm_logical_volume(vg_name)
+
+    # Create filesystem
+    create_filesystem(lv_path)
+
+    # Mount the logical volume
+    mount_media_disk(lv_path, CLOUDRIFT_MEDIA_MOUNT)
+
+    # Add to fstab (will use the device mapper path)
+    # The actual device path might be /dev/mapper/vg_name-lv_name
+    mapper_path = f"/dev/mapper/{vg_name.replace('-', '--')}-cloudrift"
+    if os.path.exists(mapper_path):
+        add_to_fstab(mapper_path, CLOUDRIFT_MEDIA_MOUNT)
+    else:
+        add_to_fstab(lv_path, CLOUDRIFT_MEDIA_MOUNT)
+
+    reload_daemon()
+    print(f"Successfully configured LVM logical volume at {CLOUDRIFT_MEDIA_MOUNT}")
+
+
+def configure_regular_disks(disks: list) -> None:
+    """
+    Configure storage using regular disks (single disk or RAID).
+
+    Args:
+        disks: List of unused disk names
+
+    Raises:
+        RuntimeError: If no disks are available
+    """
+    print(f"Detected unused whole disks: {disks}")
+
+    if len(disks) == 0:
+        raise RuntimeError("No unused disks and no LVM free space available. Unable to configure storage automatically.")
+    elif len(disks) == 1:
+        # Single disk setup
+        disk_path = f"/dev/{disks[0]}"
+        print(f"Using single disk: {disk_path}")
+
+        create_filesystem(disk_path)
+        mount_media_disk(disk_path, CLOUDRIFT_MEDIA_MOUNT)
+        add_to_fstab(disk_path, CLOUDRIFT_MEDIA_MOUNT)
+        reload_daemon()
+        print(f"Successfully configured single disk at {CLOUDRIFT_MEDIA_MOUNT}")
+    else:
+        # Multiple disks - create RAID
+        create_raid_array(disks)
+        create_filesystem("/dev/md0")
+        mount_media_disk("/dev/md0", CLOUDRIFT_MEDIA_MOUNT)
+        add_to_fstab("/dev/md0", CLOUDRIFT_MEDIA_MOUNT)
+        reload_daemon()
+        print(f"Successfully configured RAID array at {CLOUDRIFT_MEDIA_MOUNT}")
+
+
+def configure_disks():
+    """
+    Configure disks for CloudRift storage.
+    Checks for LVM free space first, then falls back to regular disks.
+    """
     # Validate dependencies we directly call
     for bin_name in ("lsblk", "systemctl", "bash", "vgs", "lvcreate"):
         if shutil.which(bin_name) is None:
@@ -120,53 +188,11 @@ def configure_disks():
     if lvm_info:
         # Use LVM free space
         vg_name, free_gb = lvm_info
-        print(f"Using LVM free space: {free_gb:.1f}GB in volume group '{vg_name}'")
-
-        # Create logical volume
-        lv_path = create_lvm_logical_volume(vg_name)
-
-        # Create filesystem
-        create_filesystem(lv_path)
-
-        # Mount the logical volume
-        mount_media_disk(lv_path, CLOUDRIFT_MEDIA_MOUNT)
-
-        # Add to fstab (will use the device mapper path)
-        # The actual device path might be /dev/mapper/vg_name-lv_name
-        mapper_path = f"/dev/mapper/{vg_name.replace('-', '--')}-cloudrift"
-        if os.path.exists(mapper_path):
-            add_to_fstab(mapper_path, CLOUDRIFT_MEDIA_MOUNT)
-        else:
-            add_to_fstab(lv_path, CLOUDRIFT_MEDIA_MOUNT)
-
-        reload_daemon()
-        print(f"Successfully configured LVM logical volume at {CLOUDRIFT_MEDIA_MOUNT}")
-
+        configure_lvm_storage(vg_name, free_gb)
     else:
         # No LVM free space, check for unused disks
         disks = find_unused_whole_disks(add_dev_prefix=False)
-        print(f"Detected unused whole disks: {disks}")
-
-        if len(disks) == 0:
-            raise RuntimeError("No unused disks and no LVM free space available. Unable to configure storage automatically.")
-        elif len(disks) == 1:
-            # Single disk setup
-            disk_path = f"/dev/{disks[0]}"
-            print(f"Using single disk: {disk_path}")
-
-            create_filesystem(disk_path)
-            mount_media_disk(disk_path, CLOUDRIFT_MEDIA_MOUNT)
-            add_to_fstab(disk_path, CLOUDRIFT_MEDIA_MOUNT)
-            reload_daemon()
-            print(f"Successfully configured single disk at {CLOUDRIFT_MEDIA_MOUNT}")
-        else:
-            # Multiple disks - create RAID
-            create_raid_array(disks)
-            create_filesystem("/dev/md0")
-            mount_media_disk("/dev/md0", CLOUDRIFT_MEDIA_MOUNT)
-            add_to_fstab("/dev/md0", CLOUDRIFT_MEDIA_MOUNT)
-            reload_daemon()
-            print(f"Successfully configured RAID array at {CLOUDRIFT_MEDIA_MOUNT}")
+        configure_regular_disks(disks)
 
 class ConfigureDisksCmd(BaseCmd):
     """ Command to configure disks. """

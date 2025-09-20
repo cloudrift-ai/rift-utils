@@ -18,6 +18,7 @@ from commands.configure_modprobe import CreateVfioConfCmd
 from commands.configure_memory import ConfigureMemoryCmd
 from commands.configure_disks import ConfigureDisksCmd
 from commands.configure_gpu_power import CreateGpuPowerUdevRuleCmd, CreateVfioPciPowerConfCmd, VerifyGpuPowerStateCmd, ConfigureGpuPowerCmd
+from commands.configure_docker import ConfigureDockerCmd
 
 GRUB_MAIN_FILE = '/etc/default/grub'
 GRUB_D_DIR = '/etc/default/grub.d'
@@ -47,6 +48,7 @@ NODE_COMMANDS = [
     CheckVirtualizationCmd(),
     RemoveNvidiaDriverCmd(),
     AptInstallCmd(REQUIRED_PACKAGES),
+    ConfigureDockerCmd(),
     ConfigureLibvirtCmd(),
     ReadGrubCmd(),
     GetIommuTypeCmd(),

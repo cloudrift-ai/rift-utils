@@ -15,7 +15,20 @@ def ensure_qemu_conf_lines() -> bool:
     contents = QEMU_CONF.read_text() if QEMU_CONF.exists() else ""
 
     # Check if user and group are already set (uncommented)
-    if 'user = "root"' in contents and 'group = "root"' in contents:
+    lines = contents.splitlines() if contents else []
+    user_configured = False
+    group_configured = False
+
+    for line in lines:
+        # Check for uncommented lines only
+        stripped = line.strip()
+        if not stripped.startswith('#'):
+            if 'user = "root"' in line:
+                user_configured = True
+            if 'group = "root"' in line:
+                group_configured = True
+
+    if user_configured and group_configured:
         print("User/group configuration already present; skipping.")
         return False
 
@@ -26,36 +39,36 @@ def ensure_qemu_conf_lines() -> bool:
     group_found = False
 
     for i, line in enumerate(lines):
-        # Check for commented user line
-        if line.strip().startswith('#') and 'user =' in line:
+        # Check for commented user line (only process if not already found)
+        if not user_found and line.strip().startswith('#') and 'user =' in line:
             # Uncomment the line and set to root
             lines[i] = 'user = "root"'
             user_found = True
             modified = True
             print(f"Uncommented and set user = \"root\"")
         # Check for uncommented user line that's not root
-        elif line.strip().startswith('user =') and 'user = "root"' not in line:
+        elif not user_found and line.strip().startswith('user =') and 'user = "root"' not in line:
             lines[i] = 'user = "root"'
             user_found = True
             modified = True
             print(f"Updated existing user setting to root")
-        elif 'user = "root"' in line:
+        elif not user_found and 'user = "root"' in line and not line.strip().startswith('#'):
             user_found = True
 
-        # Check for commented group line
-        if line.strip().startswith('#') and 'group =' in line:
+        # Check for commented group line (only process if not already found)
+        if not group_found and line.strip().startswith('#') and 'group =' in line:
             # Uncomment the line and set to root
             lines[i] = 'group = "root"'
             group_found = True
             modified = True
             print(f"Uncommented and set group = \"root\"")
         # Check for uncommented group line that's not root
-        elif line.strip().startswith('group =') and 'group = "root"' not in line:
+        elif not group_found and line.strip().startswith('group =') and 'group = "root"' not in line:
             lines[i] = 'group = "root"'
             group_found = True
             modified = True
             print(f"Updated existing group setting to root")
-        elif 'group = "root"' in line:
+        elif not group_found and 'group = "root"' in line and not line.strip().startswith('#'):
             group_found = True
 
     # If user or group not found, append them
@@ -96,8 +109,18 @@ def verify_qemu_conf() -> bool:
     try:
         contents = QEMU_CONF.read_text() if QEMU_CONF.exists() else ""
 
-        user_ok = 'user = "root"' in contents
-        group_ok = 'group = "root"' in contents
+        lines = contents.splitlines()
+        user_ok = False
+        group_ok = False
+
+        for line in lines:
+            stripped = line.strip()
+            # Only count uncommented lines
+            if not stripped.startswith('#'):
+                if 'user = "root"' in line:
+                    user_ok = True
+                if 'group = "root"' in line:
+                    group_ok = True
 
         print(f"  {'✓' if user_ok else '✗'} User set to root")
         print(f"  {'✓' if group_ok else '✗'} Group set to root")

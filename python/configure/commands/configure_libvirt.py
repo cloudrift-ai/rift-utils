@@ -14,22 +14,73 @@ def ensure_qemu_conf_lines() -> bool:
     # Read current configuration
     contents = QEMU_CONF.read_text() if QEMU_CONF.exists() else ""
 
-    # Check if user and group are already set
+    # Check if user and group are already set (uncommented)
     if 'user = "root"' in contents and 'group = "root"' in contents:
         print("User/group configuration already present; skipping.")
         return False
 
-    # Append user and group configuration
-    desired = 'user = "root"\ngroup = "root"\n'
+    # Process the configuration file line by line
+    lines = contents.splitlines() if contents else []
+    modified = False
+    user_found = False
+    group_found = False
 
-    try:
-        with QEMU_CONF.open("a") as f:
-            f.write(desired)
-        print("Appended user/group configuration.")
-        return True
-    except Exception as e:
-        print(f"Error updating qemu.conf: {e}")
-        return False
+    for i, line in enumerate(lines):
+        # Check for commented user line
+        if line.strip().startswith('#') and 'user =' in line:
+            # Uncomment the line and set to root
+            lines[i] = 'user = "root"'
+            user_found = True
+            modified = True
+            print(f"Uncommented and set user = \"root\"")
+        # Check for uncommented user line that's not root
+        elif line.strip().startswith('user =') and 'user = "root"' not in line:
+            lines[i] = 'user = "root"'
+            user_found = True
+            modified = True
+            print(f"Updated existing user setting to root")
+        elif 'user = "root"' in line:
+            user_found = True
+
+        # Check for commented group line
+        if line.strip().startswith('#') and 'group =' in line:
+            # Uncomment the line and set to root
+            lines[i] = 'group = "root"'
+            group_found = True
+            modified = True
+            print(f"Uncommented and set group = \"root\"")
+        # Check for uncommented group line that's not root
+        elif line.strip().startswith('group =') and 'group = "root"' not in line:
+            lines[i] = 'group = "root"'
+            group_found = True
+            modified = True
+            print(f"Updated existing group setting to root")
+        elif 'group = "root"' in line:
+            group_found = True
+
+    # If user or group not found, append them
+    if not user_found:
+        lines.append('user = "root"')
+        modified = True
+        print("Added user = \"root\" configuration")
+
+    if not group_found:
+        lines.append('group = "root"')
+        modified = True
+        print("Added group = \"root\" configuration")
+
+    # Write back if modifications were made
+    if modified:
+        try:
+            with QEMU_CONF.open("w") as f:
+                f.write('\n'.join(lines) + '\n')
+            print("Updated qemu.conf configuration.")
+            return True
+        except Exception as e:
+            print(f"Error updating qemu.conf: {e}")
+            return False
+
+    return False
 
 def restart_libvirtd():
     svc = "libvirtd"

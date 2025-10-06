@@ -28,7 +28,7 @@ def remove_nvidia_driver():
 
         # Run the NVIDIA uninstaller (if it exists)
         print("Running NVIDIA uninstaller...")
-        run(["/usr/bin/nvidia-uninstall", "-s"])
+        run(["/usr/bin/nvidia-uninstall", "-s"], check=False)
 
         # Remove NVIDIA driver and associated packages
         print("Removing NVIDIA packages...")

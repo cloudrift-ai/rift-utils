@@ -1,5 +1,6 @@
 
 import subprocess
+import os
 from typing import Any, Dict
 from .cmd import BaseCmd
 from .utils import run, reboot_prompt
@@ -27,8 +28,11 @@ def remove_nvidia_driver():
         print("NVIDIA driver is in use. Attempting to remove it.")
 
         # Run the NVIDIA uninstaller (if it exists)
-        print("Running NVIDIA uninstaller...")
-        run(["/usr/bin/nvidia-uninstall", "-s"], check=False)
+        if os.path.exists("/usr/bin/nvidia-uninstall"):
+            print("Running NVIDIA uninstaller...")
+            run(["/usr/bin/nvidia-uninstall", "-s"], check=False)
+        else:
+            print("NVIDIA uninstaller not found, skipping...")
 
         # Remove NVIDIA driver and associated packages
         print("Removing NVIDIA packages...")

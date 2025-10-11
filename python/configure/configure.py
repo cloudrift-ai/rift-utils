@@ -6,9 +6,12 @@ import sys
 import subprocess
 import argparse
 from typing import Dict, Any
-from commands.utils import run, reboot_prompt
+
+from pyparsing import ABC
+from commands.cmd import BaseCmd
+from commands.utils import numbered_prompt, run, reboot_prompt, yes_no_prompt
 from commands.configure_memory import configure_memory
-from commands.nvidia import RemoveNvidiaDriverCmd, remove_nvidia_driver, check_nvidia
+from commands.nvidia import InstallNvidiaDriverCmd, RemoveNvidiaDriverCmd, remove_nvidia_driver, check_nvidia
 from commands.configure_disks import configure_disks
 from commands.apt_install import AptInstallCmd
 from commands.configure_libvirt import ConfigureLibvirtCmd, CheckVirtualizationCmd
@@ -44,8 +47,69 @@ def reboot_server():
     print("  grep hugetlbfs /proc/mounts")
     reboot_prompt()
 
+class Workflow(ABC):
+
+    commands: list[BaseCmd] = []
+
+    """
+    Abstract base class for configuration commands.
+    """
+    def name(self) -> str:
+        raise NotImplementedError("Subclasses must implement name()")
+
+    def description(self) -> str:
+        raise NotImplementedError("Subclasses must implement description()")
+
+    def execute(self, env: Dict[str, Any]) -> bool | None:
+        total_commands = len(self.commands)
+        print(f"📋 Found {total_commands} configuration command(s) to execute:")
+        print("-" * 60)
+        
+        # Print overview of all commands first
+        for i, command in enumerate(self.commands, start=1):
+            print(f"  {i}. {command.name()}")
+            print(f"     └─ {command.description()}")
+        print("-" * 60)
+        print()
+
+        # Prompt for confirmation
+        if yes_no_prompt("Do you want to proceed with these changes?", default=True) is False:
+            print("Operation cancelled by user.")
+            return None  # Not an error, just cancelled
+
+        env = {}  # Shared environment dictionary for commands
+
+        # Execute commands with enhanced output
+        for i, command in enumerate(self.commands, start=1):
+            print(f"🚀 Step {i}/{total_commands}: {command.name()}")
+            print(f"📝 Description: {command.description()}")
+            print(f"⏳ Executing...")
+            
+            try:
+                success = command.execute(env)
+                if success:
+                    print(f"✅ Step {i}/{total_commands} completed successfully!")
+                else:
+                    print(f"❌ Step {i}/{total_commands} failed!")
+                    print(f"💥 Command '{command.name()}' encountered an error. Exiting.")
+                    return False
+            except Exception as e:
+                print(f"❌ Step {i}/{total_commands} failed with exception!")
+                print(f"💥 Error: {str(e)}")
+                print(f"🛑 Command '{command.name()}' failed. Exiting.")
+                return False
+
+            print("-" * 40)
+            print()
+
+        print("🎉 All configuration commands completed successfully!")
+        print("=" * 60)        
+        return True
+
+# All available commands to execute selectively
 NODE_COMMANDS = [
     CheckVirtualizationCmd(),
+    InstallNvidiaDriverCmd(),
     RemoveNvidiaDriverCmd(),
     AptInstallCmd(REQUIRED_PACKAGES),
     ConfigureDockerCmd(),
@@ -62,6 +126,154 @@ NODE_COMMANDS = [
     CreateGrubOverrideCmd(),
     VerifyGpuPowerStateCmd()  # Verify GPU power settings at the end
 ]
+
+class VmOnlyWorkflow(Workflow):
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.commands = [
+            CheckVirtualizationCmd(),
+            RemoveNvidiaDriverCmd(),
+            AptInstallCmd(REQUIRED_PACKAGES),
+            ConfigureDockerCmd(),
+            ConfigureLibvirtCmd(),
+            ReadGrubCmd(),
+            GetIommuTypeCmd(),
+            GetGpuPciIdsCmd(),
+            AddGrubVirtualizationOptionsCmd(),
+            UpdateInitramfsModulesCmd(),
+            CreateVfioConfCmd(),
+            ConfigureGpuPowerCmd(),  # Configure GPU power management (udev + modprobe)
+            ConfigureMemoryCmd(),
+            ConfigureDisksCmd(),
+            CreateGrubOverrideCmd(),
+            VerifyGpuPowerStateCmd()  # Verify GPU power settings at the end
+        ]
+
+    def name(self) -> str:
+        return "VM-Only Configuration Workflow"
+
+    def description(self) -> str:
+        return "A workflow for configuring a virtual machine environment."
+
+class VmAndDockerWorkflow(Workflow):
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.commands = [
+            CheckVirtualizationCmd(),
+            AptInstallCmd(REQUIRED_PACKAGES),
+            ConfigureDockerCmd(),
+            ConfigureLibvirtCmd(),
+            ReadGrubCmd(),
+            GetIommuTypeCmd(),
+            GetGpuPciIdsCmd(),
+            AddGrubVirtualizationOptionsCmd(),
+            UpdateInitramfsModulesCmd(),
+            CreateVfioConfCmd(),
+            ConfigureGpuPowerCmd(),  # Configure GPU power management (udev + modprobe)
+            ConfigureMemoryCmd(),
+            ConfigureDisksCmd(),
+            CreateGrubOverrideCmd(),
+            VerifyGpuPowerStateCmd()  # Verify GPU power settings at the end
+        ]
+
+    def name(self) -> str:
+        return "VM and Docker Configuration Workflow"
+
+    def description(self) -> str:
+        return "A workflow for configuring both virtual machine and Docker environments."
+
+class TestWorkflow(Workflow):
+    
+    def __init__(self) -> None:
+        super().__init__()
+        self.commands = [
+            CheckVirtualizationCmd(),
+            AptInstallCmd(REQUIRED_PACKAGES),
+        ]
+
+    def name(self) -> str:
+        return "Test Configuration Workflow"
+
+    def description(self) -> str:
+        return "A test workflow for verifying configuration steps."
+
+WORKFLOWS = [
+    VmAndDockerWorkflow(),
+    VmOnlyWorkflow(),
+    TestWorkflow()
+]
+
+def list_workflows():
+    """
+    List all available configuration workflows.
+    """
+    print("=" * 60)
+    print("📋 AVAILABLE CONFIGURATION WORKFLOWS")
+    print("=" * 60)
+    
+    for i, workflow in enumerate(WORKFLOWS, start=1):
+        print(f"  {i}. {workflow.name()}")
+        print(f"     └─ {workflow.description()}")
+    print("=" * 60)
+    print(f"Total: {len(WORKFLOWS)} workflows available")
+
+def execute_workflow(workflow_identifier):
+    """
+    Execute a specific workflow by index or name.
+    """
+    if os.geteuid() != 0:
+        print("This script must be run with sudo.")
+        sys.exit(1)
+
+    env = {}  # Shared environment dictionary
+    workflow_to_execute = None
+    workflow_index = None
+
+    # Try to parse as index first
+    try:
+        index = int(workflow_identifier) - 1  # Convert to 0-based index
+        if 0 <= index < len(WORKFLOWS):
+            workflow_to_execute = WORKFLOWS[index]
+            workflow_index = index + 1
+    except ValueError:
+        # Not a number, try to find by name
+        for i, workflow in enumerate(WORKFLOWS):
+            if workflow.name().lower() == workflow_identifier.lower():
+                workflow_to_execute = workflow
+                workflow_index = i + 1
+                break
+
+    if workflow_to_execute is None:
+        print(f"❌ Workflow '{workflow_identifier}' not found.")
+        print("Use --list-workflows to see available workflows.")
+        sys.exit(1)
+
+    print("=" * 60)
+    print(f"🚀 Executing workflow {workflow_index}: {workflow_to_execute.name()}")
+    print(f"📝 Description: {workflow_to_execute.description()}")
+    print(f"⏳ Executing...")
+    
+    try:
+        success = workflow_to_execute.execute(env)
+        if success is None:
+            print("⚠️ Workflow execution cancelled by user.")
+            sys.exit(0)
+        elif success:
+            print(f"✅ Workflow completed successfully!")
+        else:
+            print(f"❌ Workflow failed!")
+            sys.exit(1)
+    except Exception as e:
+        print(f"❌ Workflow failed with exception!")
+        print(f"💥 Error: {str(e)}")
+        sys.exit(1)
+    
+    print("🎉 Workflow execution completed!")
+    print("=" * 60)
+
+    reboot_server()
 
 def list_commands():
     """
@@ -196,19 +408,33 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python configure.py                    # Run all configuration commands
-  python configure.py --list            # List all available commands
-  python configure.py --command 3       # Execute command #3 only
-  python configure.py --command "Remove Nvidia Driver"  # Execute by name
+  configure.py                     # Run all configuration commands
+  configure.py --list-workflows    # List all available workflows
+  configure.py --list-commands     # List all available commands
+  configure.py --workflow <index or name>  # Execute a specific workflow
+  configure.py --command 3         # Execute command #3 only
+  configure.py --command "Remove Nvidia Driver"  # Execute by name
         """
     )
-    
+
     parser.add_argument(
-        "--list", 
+        "--list-workflows", 
+        action="store_true",
+        help="List all available configuration workflows"
+    )
+
+    parser.add_argument(
+        "--list-commands", 
         action="store_true",
         help="List all available configuration commands"
     )
     
+    parser.add_argument(
+        "--workflow", 
+        metavar="ID_OR_NAME",
+        help="Execute only the specified workflow (by number or name)"
+    )
+
     parser.add_argument(
         "--command", 
         metavar="ID_OR_NAME",
@@ -217,12 +443,19 @@ Examples:
     
     args = parser.parse_args()
     
-    if args.list:
+    if args.list_workflows:
+        list_workflows()
+    elif args.list_commands:
         list_commands()
     elif args.command:
         execute_specific_command(args.command)
+    elif args.workflow:
+        execute_workflow(args.workflow)
     else:
-        configure_node()
+        list_workflows()
+        workflow_choice = numbered_prompt("Select workflow for this node", 1, len(WORKFLOWS))
+        if workflow_choice is not None:
+            execute_workflow(workflow_choice)
 
 if __name__ == "__main__":
     main()

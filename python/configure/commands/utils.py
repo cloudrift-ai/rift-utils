@@ -15,9 +15,30 @@ def run(cmd, check=True, capture_output=False, quiet_stderr=False, shell=False):
     stdout = result.stdout.strip() if capture_output and result.stdout else ""
     return stdout, result.stderr if quiet_stderr else None, result.returncode
 
+def yes_no_prompt(prompt: str, default: bool) -> bool:
+    default_input = 'y' if default else 'n'
+    default_yes = 'Y' if default else 'y'
+    default_no = 'N' if not default else 'n'
+    print(f"{prompt} ({default_yes}/{default_no})")
+    return (input() or default_input).lower() == 'y'
+
+def numbered_prompt(prompt: str, min_index: int, max_index: int) -> int | None:
+    print(prompt)
+    while True:
+        try:
+            value = input(f"Enter a number ({min_index}-{max_index}) or <Enter> for exit: ")
+            if value == "":
+                return None
+            choice = int(value)
+            if min_index <= choice <= max_index:
+                return choice
+            else:
+                print(f"Please enter a number between {min_index} and {max_index}.")
+        except ValueError:
+            print("Invalid input. Please enter a valid number.")
+
 def reboot_prompt():
-    print("\nReboot now? (y/N)")
-    if (input() or 'n').lower() == 'y':
+    if yes_no_prompt("\nReboot now?", False):
         print("Rebooting...")
         run(["reboot"])
     else:

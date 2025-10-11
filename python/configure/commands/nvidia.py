@@ -58,6 +58,14 @@ def remove_nvidia_driver():
     else:
         print("NVIDIA driver does not appear to be in use, or the command failed to run.")
 
+def install_nvidia_driver():
+    """
+    Install the NVIDIA driver.
+    """
+    print("Installing NVIDIA driver...")
+    run(["apt-get", "install", "-y", "nvidia-driver"])
+    reboot_prompt()
+
 class RemoveNvidiaDriverCmd(BaseCmd):
     """ Command to remove NVIDIA driver. """
 
@@ -69,4 +77,18 @@ class RemoveNvidiaDriverCmd(BaseCmd):
 
     def execute(self, env: Dict[str, Any]) -> bool:
         remove_nvidia_driver()
+        return True
+
+
+class InstallNvidiaDriverCmd(BaseCmd):
+    """ Command to install NVIDIA driver. """
+
+    def name(self) -> str:
+        return "Install NVIDIA Driver"
+
+    def description(self) -> str:
+        return "Checks for and installs NVIDIA drivers if they are not installed."
+
+    def execute(self, env: Dict[str, Any]) -> bool:
+        install_nvidia_driver()
         return True

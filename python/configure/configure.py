@@ -8,7 +8,7 @@ from typing import Dict, Any
 from pyparsing import ABC
 from commands.cmd import BaseCmd
 from commands.utils import numbered_prompt, reboot_prompt, yes_no_prompt
-from commands.nvidia import InstallNvidiaCudaToolkitCmd, InstallNvidiaDriverCmd, RemoveNvidiaDriverCmd
+from commands.nvidia import InstallNvidiaContainerToolkitCmd, InstallNvidiaCudaToolkitCmd, InstallNvidiaDriverCmd, RemoveNvidiaDriverCmd
 from commands.apt_install import AptInstallCmd
 from commands.configure_libvirt import ConfigureLibvirtCmd, CheckVirtualizationCmd
 from commands.configure_grub import ReadGrubCmd, GetIommuTypeCmd, GetGpuPciIdsCmd, AddGrubVirtualizationOptionsCmd, CreateGrubOverrideCmd, RemoveGrubOverrideCmd
@@ -164,6 +164,7 @@ class VmAndDockerWorkflow(Workflow):
             RemoveGrubOverrideCmd(),
             InstallNvidiaDriverCmd(),
             ConfigureDockerCmd(),
+            InstallNvidiaContainerToolkitCmd(),
             InstallNvidiaCudaToolkitCmd(),
             ConfigureLibvirtCmd(),
             ReadGrubCmd(),
@@ -194,6 +195,7 @@ class TestWorkflow(Workflow):
             AptInstallCmd(REQUIRED_PACKAGES),
             InstallNvidiaDriverCmd(),
             RemoveGrubOverrideCmd(),
+            InstallNvidiaContainerToolkitCmd(),
             InstallNvidiaCudaToolkitCmd(),
         ]
 

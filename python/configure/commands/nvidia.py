@@ -214,6 +214,88 @@ def install_nvidia_container_toolkit() -> bool:
         print(f"Error installing NVIDIA Container Toolkit: {e}")
         return False
 
+def find_cuda_versions() -> list[str]:
+    """
+    Find available CUDA Toolkit versions from the package repository.
+    """
+    try:
+        # Search for cuda toolkit packages
+        output, _, return_code = run(
+            ["apt", "search", "cuda-toolkit"], 
+            shell=False, 
+            capture_output=True, 
+            check=False
+        )
+        
+        if return_code != 0:
+            return []
+        
+        versions = []
+        for line in output.split('\n'):
+            if 'cuda-toolkit-' in line and line.startswith('cuda-toolkit-'):
+                # Extract version number
+                package_name = line.split('/')[0].strip()
+                if package_name not in versions:
+                    versions.append(package_name)
+        
+        return sorted(versions)
+        
+    except Exception as e:
+        print(f"Error finding CUDA Toolkit versions: {e}")
+        return []    
+    return []
+
+def check_cuda_installed() -> bool:
+    """
+    Check if CUDA Toolkit is installed.
+    """
+    try:
+        output, _, return_code = run(
+            ["nvcc", "--version"], 
+            shell=False, 
+            capture_output=True, 
+            check=False
+        )
+        if return_code == 0 and output:
+            print(f"CUDA Toolkit is installed: {output.strip()}")
+            return True
+        else:
+            print("CUDA Toolkit is not installed.")
+            return False
+    except Exception as e:
+        print(f"Error checking CUDA Toolkit installation: {e}")
+        return False
+
+def install_nvidia_cuda_toolkit() -> bool:
+    """
+    Install NVIDIA CUDA Toolkit.
+    """
+    try:
+        cuda_packages = find_cuda_versions()
+        if not cuda_packages:
+            print("No CUDA Toolkit versions found in the repository.")
+            return False
+
+        for idx, package in enumerate(cuda_packages):
+            print(f"{idx + 1}. {package}")
+        print("CUDA Toolkit Driver Version Ranges:")
+        print("  cuda-toolkit-13: Driver >= 580")
+        print("  cuda-toolkit-12: Driver >= 525")
+        print("  cuda-toolkit-11: Driver >= 450")
+        choice = numbered_prompt("Select the CUDA Toolkit package to install:", 1, len(cuda_packages))
+        if choice is None:
+            print("No package selected, aborting installation.")
+            return False
+
+        print(f"Installing NVIDIA CUDA Toolkit {cuda_packages[choice - 1]}")
+        run(["apt-get", "install", "-y", cuda_packages[choice - 1]])
+
+        print("NVIDIA CUDA Toolkit installation completed successfully.")
+        return True
+    except Exception as e:
+        print(f"Error installing NVIDIA CUDA Toolkit: {e}")
+        return False
+
 class RemoveNvidiaDriverCmd(BaseCmd):
     """ Command to remove NVIDIA driver. """
 
@@ -245,6 +327,22 @@ class InstallNvidiaDriverCmd(BaseCmd):
         install_nvidia_driver()
         return True
 
+class InstallNvidiaContainerToolkitCmd(BaseCmd):
+    """ Command to install NVIDIA Container Toolkit. """
+
+    def name(self) -> str:
+        return "Install NVIDIA Container Toolkit"
+
+    def description(self) -> str:
+        return "Installs the NVIDIA Container Toolkit."
+
+    def execute(self, env: Dict[str, Any]) -> bool:
+        if not check_nvidia_installed():
+            print("NVIDIA driver is not installed. Please install the driver first.")
+            return False
+
+        return install_nvidia_container_toolkit()
+
 class InstallNvidiaCudaToolkitCmd(BaseCmd):
     """ Command to install NVIDIA CUDA Toolkit. """
 
@@ -259,4 +357,8 @@ class InstallNvidiaCudaToolkitCmd(BaseCmd):
             print("NVIDIA driver is not installed. Please install the driver first.")
             return False
 
-        return install_nvidia_container_toolkit()
+        if check_cuda_installed():
+            if not yes_no_prompt("NVIDIA CUDA Toolkit is already installed. Do you want to reinstall it?", False):
+                return True
+
+        return install_nvidia_cuda_toolkit()

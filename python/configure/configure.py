@@ -15,7 +15,7 @@ from commands.nvidia import InstallNvidiaDriverCmd, RemoveNvidiaDriverCmd, remov
 from commands.configure_disks import configure_disks
 from commands.apt_install import AptInstallCmd
 from commands.configure_libvirt import ConfigureLibvirtCmd, CheckVirtualizationCmd
-from commands.configure_grub import ReadGrubCmd, GetIommuTypeCmd, GetGpuPciIdsCmd, AddGrubVirtualizationOptionsCmd, CreateGrubOverrideCmd
+from commands.configure_grub import ReadGrubCmd, GetIommuTypeCmd, GetGpuPciIdsCmd, AddGrubVirtualizationOptionsCmd, CreateGrubOverrideCmd, RemoveGrubOverrideCmd
 from commands.configure_initramfs import UpdateInitramfsModulesCmd
 from commands.configure_modprobe import CreateVfioConfCmd
 from commands.configure_memory import ConfigureMemoryCmd
@@ -124,6 +124,7 @@ NODE_COMMANDS = [
     ConfigureMemoryCmd(),
     ConfigureDisksCmd(),
     CreateGrubOverrideCmd(),
+    RemoveGrubOverrideCmd(),
     VerifyGpuPowerStateCmd()  # Verify GPU power settings at the end
 ]
 
@@ -163,6 +164,8 @@ class VmAndDockerWorkflow(Workflow):
         self.commands = [
             CheckVirtualizationCmd(),
             AptInstallCmd(REQUIRED_PACKAGES),
+            RemoveGrubOverrideCmd(),
+            InstallNvidiaDriverCmd(),
             ConfigureDockerCmd(),
             ConfigureLibvirtCmd(),
             ReadGrubCmd(),
@@ -191,6 +194,8 @@ class TestWorkflow(Workflow):
         self.commands = [
             CheckVirtualizationCmd(),
             AptInstallCmd(REQUIRED_PACKAGES),
+            InstallNvidiaDriverCmd(),
+            RemoveGrubOverrideCmd(),
         ]
 
     def name(self) -> str:

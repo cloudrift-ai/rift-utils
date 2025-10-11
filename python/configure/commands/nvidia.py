@@ -151,7 +151,49 @@ def configure_container_toolkit_repository() -> bool:
         return False
     return True
 
+def check_nvidia_container_toolkit_installed() -> bool:
+    """
+    Check if NVIDIA Container Toolkit is installed.
+    """
+    try:
+        # Method 1: Check if nvidia-ctk command is available
+        output, _, return_code = run(
+            ["nvidia-ctk", "--version"], 
+            shell=False, 
+            capture_output=True, 
+            check=False
+        )
+        if return_code == 0:
+            print(f"NVIDIA Container Toolkit is installed: {output.strip()}")
+            return True
+        
+        # Method 2: Check package installation status
+        output, _, return_code = run(
+            ["dpkg", "-s", "nvidia-container-toolkit"], 
+            shell=False, 
+            capture_output=True, 
+            check=False
+        )
+        if return_code == 0 and "Status: install ok installed" in output:
+            print("NVIDIA Container Toolkit package is installed.")
+            return True
+            
+        print("NVIDIA Container Toolkit is not installed.")
+        return False
+        
+    except Exception as e:
+        print(f"Error checking NVIDIA Container Toolkit installation: {e}")
+        return False
+
 def install_nvidia_container_toolkit() -> bool:
+    """
+    Install NVIDIA Container Toolkit if not already installed.
+    """
+    # Check if already installed
+    if check_nvidia_container_toolkit_installed():
+        if not yes_no_prompt("NVIDIA Container Toolkit is already installed. Do you want to reinstall it?", False):
+            return True
+    
     if not configure_container_toolkit_repository():
         print("Failed to configure NVIDIA Container Toolkit repository.")
         return False
@@ -159,8 +201,14 @@ def install_nvidia_container_toolkit() -> bool:
     try:
         print("Installing NVIDIA Container Toolkit...")
         run(["apt-get", "install", "-y", "nvidia-container-toolkit"])
+        
+        print("Configuring Docker runtime...")
         run(["nvidia-ctk", "runtime", "configure", "--runtime=docker"])
+        
+        print("Restarting Docker service...")
         run(["systemctl", "restart", "docker"])
+        
+        print("NVIDIA Container Toolkit installation completed successfully.")
         return True
     except Exception as e:
         print(f"Error installing NVIDIA Container Toolkit: {e}")

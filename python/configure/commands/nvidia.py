@@ -123,6 +123,49 @@ def install_nvidia_driver():
     run(["apt-get", "install", "-y", drivers[choice - 1]])
     reboot_prompt()
 
+def configure_container_toolkit_repository() -> bool:
+    """
+    Configure the NVIDIA Container Toolkit repository.
+    """
+    try:
+        print("Configuring NVIDIA Container Toolkit repository...")
+
+        print("Downloading and installing NVIDIA GPG key...")
+        tmp_gpg_path = "/tmp/nvidia-gpg-key"
+        run(["curl", "-fsSL", "https://nvidia.github.io/libnvidia-container/gpgkey", "-o", tmp_gpg_path], check=True)
+        run(["gpg", "--dearmor", tmp_gpg_path, "-o", "/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg"], shell=True, check=True)
+        os.remove(tmp_gpg_path)
+
+        print("Adding NVIDIA Container Toolkit repository...")
+        tmp_repo_path = "/tmp/nvidia-container-toolkit.list"
+        run(["curl", "-sL", "https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list", "-o", tmp_repo_path], check=True)
+        run(["sed", "-i", "s#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g", tmp_repo_path], check=True)
+        run(["mv", tmp_repo_path, "/etc/apt/sources.list.d/nvidia-container-toolkit.list"], check=True)
+
+        print("Updating package lists...")
+        run(["apt-get", "update"], check=True)
+
+        print("NVIDIA Container Toolkit repository configured successfully.")
+    except Exception as e:
+        print(f"Error configuring NVIDIA Container Toolkit repository: {e}")
+        return False
+    return True
+
+def install_nvidia_container_toolkit() -> bool:
+    if not configure_container_toolkit_repository():
+        print("Failed to configure NVIDIA Container Toolkit repository.")
+        return False
+
+    try:
+        print("Installing NVIDIA Container Toolkit...")
+        run(["apt-get", "install", "-y", "nvidia-container-toolkit"])
+        run(["nvidia-ctk", "runtime", "configure", "--runtime=docker"])
+        run(["systemctl", "restart", "docker"])
+        return True
+    except Exception as e:
+        print(f"Error installing NVIDIA Container Toolkit: {e}")
+        return False
+
 class RemoveNvidiaDriverCmd(BaseCmd):
     """ Command to remove NVIDIA driver. """
 
@@ -153,3 +196,19 @@ class InstallNvidiaDriverCmd(BaseCmd):
         
         install_nvidia_driver()
         return True
+
+class InstallNvidiaCudaToolkitCmd(BaseCmd):
+    """ Command to install NVIDIA CUDA Toolkit. """
+
+    def name(self) -> str:
+        return "Install NVIDIA CUDA Toolkit"
+
+    def description(self) -> str:
+        return "Installs the NVIDIA CUDA Toolkit."
+
+    def execute(self, env: Dict[str, Any]) -> bool:
+        if not check_nvidia_installed():
+            print("NVIDIA driver is not installed. Please install the driver first.")
+            return False
+
+        return install_nvidia_container_toolkit()

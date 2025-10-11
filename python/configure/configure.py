@@ -1,18 +1,14 @@
 #!/usr/bin/env python3
 
 import os
-import re
 import sys
-import subprocess
 import argparse
 from typing import Dict, Any
 
 from pyparsing import ABC
 from commands.cmd import BaseCmd
-from commands.utils import numbered_prompt, run, reboot_prompt, yes_no_prompt
-from commands.configure_memory import configure_memory
-from commands.nvidia import InstallNvidiaDriverCmd, RemoveNvidiaDriverCmd, remove_nvidia_driver, check_nvidia
-from commands.configure_disks import configure_disks
+from commands.utils import numbered_prompt, reboot_prompt, yes_no_prompt
+from commands.nvidia import InstallNvidiaCudaToolkitCmd, InstallNvidiaDriverCmd, RemoveNvidiaDriverCmd
 from commands.apt_install import AptInstallCmd
 from commands.configure_libvirt import ConfigureLibvirtCmd, CheckVirtualizationCmd
 from commands.configure_grub import ReadGrubCmd, GetIommuTypeCmd, GetGpuPciIdsCmd, AddGrubVirtualizationOptionsCmd, CreateGrubOverrideCmd, RemoveGrubOverrideCmd
@@ -20,7 +16,7 @@ from commands.configure_initramfs import UpdateInitramfsModulesCmd
 from commands.configure_modprobe import CreateVfioConfCmd
 from commands.configure_memory import ConfigureMemoryCmd
 from commands.configure_disks import ConfigureDisksCmd
-from commands.configure_gpu_power import CreateGpuPowerUdevRuleCmd, CreateVfioPciPowerConfCmd, VerifyGpuPowerStateCmd, ConfigureGpuPowerCmd
+from commands.configure_gpu_power import VerifyGpuPowerStateCmd, ConfigureGpuPowerCmd
 from commands.configure_docker import ConfigureDockerCmd
 
 GRUB_MAIN_FILE = '/etc/default/grub'
@@ -113,6 +109,7 @@ NODE_COMMANDS = [
     RemoveNvidiaDriverCmd(),
     AptInstallCmd(REQUIRED_PACKAGES),
     ConfigureDockerCmd(),
+    InstallNvidiaCudaToolkitCmd(),
     ConfigureLibvirtCmd(),
     ReadGrubCmd(),
     GetIommuTypeCmd(),
@@ -167,6 +164,7 @@ class VmAndDockerWorkflow(Workflow):
             RemoveGrubOverrideCmd(),
             InstallNvidiaDriverCmd(),
             ConfigureDockerCmd(),
+            InstallNvidiaCudaToolkitCmd(),
             ConfigureLibvirtCmd(),
             ReadGrubCmd(),
             GetIommuTypeCmd(),
@@ -196,6 +194,7 @@ class TestWorkflow(Workflow):
             AptInstallCmd(REQUIRED_PACKAGES),
             InstallNvidiaDriverCmd(),
             RemoveGrubOverrideCmd(),
+            InstallNvidiaCudaToolkitCmd(),
         ]
 
     def name(self) -> str:

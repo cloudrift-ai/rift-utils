@@ -237,6 +237,29 @@ class AddGrubVirtualizationOptionsCmd(BaseCmd):
         print(f"Updated GRUB_CMDLINE_LINUX_DEFAULT: {env['GRUB_CMDLINE_LINUX_DEFAULT']}")
         return True
 
+class RemoveGrubOverrideCmd(BaseCmd):
+    """ Command to remove GRUB override file. """
+
+    def name(self) -> str:
+        return "Remove GRUB Override"
+    
+    def description(self) -> str:
+        return "Removes the GRUB override file if it exists."
+
+    def execute(self, env: Dict[str, Any]) -> bool:
+        if os.path.exists(VFIO_GRUB_FILE):
+            try:
+                os.remove(VFIO_GRUB_FILE)
+                print(f"Removed GRUB override file {VFIO_GRUB_FILE}.")
+                update_grub()
+                return True
+            except OSError as e:
+                print(f"Error removing {VFIO_GRUB_FILE}: {e}")
+                return False
+        else:
+            print(f"No GRUB override file {VFIO_GRUB_FILE} found to remove.")
+            return True
+
 class CreateGrubOverrideCmd(BaseCmd):
     """ Command to create GRUB override file. """
 

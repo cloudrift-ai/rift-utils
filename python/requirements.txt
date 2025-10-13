@@ -2,6 +2,8 @@
 pytest==8.3.3
 pytest-cov==5.0.0
 pytest-mock==3.14.0
+pyparsing==3.2.5
+PyYAML==6.0.3
 
 # Development dependencies
 black==24.8.0

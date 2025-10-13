@@ -1,0 +1,21 @@
+---
+# Minimal Test Workflow
+# A simple workflow for testing the YAML loader functionality
+
+name: "Test Workflow"
+description: "Simple test workflow to verify YAML loading works"
+
+commands:
+  - name: "CheckVirtualizationCmd"
+  - name: "AptInstallCmd"
+    environment: 
+      packages:
+        - "qemu-kvm"
+        - "libvirt-daemon-system"
+        - "genisoimage"
+        - "whois"
+        - "mdadm"
+  #- name: "InstallNvidiaDriverCmd"
+  #- name: "RemoveGrubOverrideCmd"
+  #- name: "InstallNvidiaContainerToolkitCmd"
+  #- name: "InstallNvidiaCudaToolkitCmd"

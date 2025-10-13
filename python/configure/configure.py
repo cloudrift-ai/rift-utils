@@ -29,13 +29,13 @@ ALL_COMMANDS = get_all_commands()
 WORKFLOWS = [
 ]
 
-REQUIRED_PACKAGES = [
-    "qemu-kvm",
-    "libvirt-daemon-system",
-    "genisoimage",
-    "whois",
-    "mdadm"  # RAID devices
-]
+# REQUIRED_PACKAGES = [
+#     "qemu-kvm",
+#     "libvirt-daemon-system",
+#     "genisoimage",
+#     "whois",
+#     "mdadm"  # RAID devices
+# ]
 
 def reboot_server():
     """

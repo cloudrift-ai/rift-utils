@@ -1,0 +1,27 @@
+name: "VM-Only Configuration"
+description: "A workflow for configuring a virtual machine environment."
+
+commands:
+  - name: "CheckVirtualizationCmd"
+  - name: "RemoveNvidiaDriverCmd"
+  - name: "AptInstallCmd"
+    environment:
+      packages:
+        - "qemu-kvm"
+        - "libvirt-daemon-system"
+        - "genisoimage"
+        - "whois"
+        - "mdadm"
+  - name: "ConfigureDockerCmd"
+  - name: "ConfigureLibvirtCmd"
+  - name: "ReadGrubCmd"
+  - name: "GetIommuTypeCmd"
+  - name: "GetGpuPciIdsCmd"
+  - name: "AddGrubVirtualizationOptionsCmd"
+  - name: "UpdateInitramfsModulesCmd"
+  - name: "CreateVfioConfCmd"
+  - name: "ConfigureGpuPowerCmd"
+  - name: "ConfigureMemoryCmd"
+  - name: "ConfigureDisksCmd"
+  - name: "CreateGrubOverrideCmd"
+  - name: "VerifyGpuPowerStateCmd"

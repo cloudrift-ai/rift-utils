@@ -12,16 +12,16 @@ class AptInstallCmd(BaseCmd):
         return "Apt Install Packages"
     
     def description(self) -> str:
-        return f"Installs packages using apt ({', '.join(self.packages)})"
+        return f"Installs packages using apt."
     
-    def __init__(self, packages: List[str]):
-        self.packages = packages
-
     def execute(self, env: Dict[str, Any]) -> bool:
+        packages = env.get("packages", [])
         try:
             run(["apt-get", "update"])
-            run(["apt-get", "install", "-y"] + self.packages)
+            if len(packages) > 0:
+                print(f"Installing packages: {packages}")
+                run(["apt-get", "install", "-y"] + packages)
             return True
         except subprocess.CalledProcessError as e:
-            print(f"Failed to install packages {self.packages}: {e}")
+            print(f"Failed to install packages {packages}: {e}")
             return False

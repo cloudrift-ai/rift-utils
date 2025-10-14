@@ -26,7 +26,7 @@ def create_command_instance(command_class):
         print(f"Error creating instance of {command_class.__name__}: {e}")
         return None
 
-for (_, name, _) in pkgutil.iter_modules([Path(__file__).parent]):
+for (_, name, _) in pkgutil.iter_modules([str(Path(__file__).parent)]):
     try:
         imported_module = import_module('.' + name, package=__name__)
     except ImportError as e:

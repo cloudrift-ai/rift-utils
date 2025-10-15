@@ -131,8 +131,8 @@ def configure_container_toolkit_repository() -> bool:
         print("Configuring NVIDIA Container Toolkit repository...")
 
         print("Downloading and installing NVIDIA GPG key...")
-        run(["curl", "-fsSL", "https://nvidia.github.io/libnvidia-container/gpgkey",
-                    "|", "gpg", "-o", "/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg"], shell=True, check=True)
+        run("curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | gpg -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg",
+            shell=True, check=True)
 
         print("Adding NVIDIA Container Toolkit repository...")
         tmp_repo_path = "/tmp/nvidia-container-toolkit.list"

@@ -11,5 +11,5 @@ wget https://developer.download.nvidia.com/compute/cuda/repos/${OS_VERSION}/${AR
 sudo dpkg -i /tmp/cuda-keyring_1.1-1_all.deb
 rm /tmp/cuda-keyring_1.1-1_all.deb
 sudo apt-get update
-# 12.9 is supported by driver 575
-sudo apt-get install -y cuda-toolkit-12-9
+# 13.x is supported by driver 580
+sudo apt-get install -y cuda-toolkit-13

@@ -219,28 +219,32 @@ def find_cuda_versions() -> list[str]:
     try:
         # Search for cuda toolkit packages
         output, _, return_code = run(
-            ["apt", "search", "cuda-toolkit"], 
-            shell=False, 
-            capture_output=True, 
+            ["apt", "search", "cuda-toolkit"],
+            shell=False,
+            capture_output=True,
             check=False
         )
-        
+
         if return_code != 0:
             return []
-        
+
         versions = []
         for line in output.split('\n'):
-            if 'cuda-toolkit-' in line and line.startswith('cuda-toolkit-'):
-                # Extract version number
+            # Match both patterns: nvidia-cuda-toolkit and cuda-toolkit-
+            # nvidia-cuda-toolkit is the main package in Ubuntu repos
+            # cuda-toolkit-XX-Y are version-specific packages from NVIDIA repos
+            if ('nvidia-cuda-toolkit' in line and line.startswith('nvidia-cuda-toolkit')) or \
+               ('cuda-toolkit-' in line and line.startswith('cuda-toolkit-')):
+                # Extract package name (before the '/' separator)
                 package_name = line.split('/')[0].strip()
                 if package_name not in versions:
                     versions.append(package_name)
-        
+
         return sorted(versions)
-        
+
     except Exception as e:
         print(f"Error finding CUDA Toolkit versions: {e}")
-        return []    
+        return []
     return []
 
 def check_cuda_installed() -> bool:

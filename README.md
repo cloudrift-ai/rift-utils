@@ -8,9 +8,18 @@ The configuration system provides flexible workflow-based setup for CloudRift se
 
 ### Quick Start
 
-Workflows are loaded from the `workflows` directory. You can also create your own custom workflows using YAML files.
+**Recommended: Using Makefile (handles all dependencies automatically)**
+```bash
+sudo make configure
+```
 
-**Basic Usage:**  
+This single command will:
+1. Install system dependencies (python3, python3-venv, python3-pip)
+2. Create a Python virtual environment
+3. Install required Python dependencies
+4. Run the configure script with sudo
+
+**Alternative: Manual Python execution**
 ```bash
 sudo python3 python/configure/configure.py
 ```
@@ -72,10 +81,24 @@ sudo ./python/configure/configure.py --command "Install NVIDIA Driver"
 
 ### Requirements
 
-Install the required Python dependencies:
+**Option 1: Using Makefile (recommended)**
+```bash
+make install
+```
+
+**Option 2: Manual installation**
 ```bash
 pip3 install -r python/requirements.txt
 ```
+
+### Available Makefile Commands
+
+- `make configure` - Complete setup: installs system deps, creates venv, installs Python deps, and runs configure script (requires sudo)
+- `make system-deps` - Install system dependencies (python3, python3-venv, python3-pip) only - requires sudo
+- `make venv` - Create Python virtual environment only
+- `make install` - Install Python dependencies in venv only
+- `make clean` - Remove virtual environment
+- `make help` - Display available commands
 
 ### Client Setup Script
 

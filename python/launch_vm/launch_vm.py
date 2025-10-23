@@ -1238,6 +1238,144 @@ local-hostname: {vm_config.name}
         
         print(f"\nCleanup completed. Destroyed {len(created_vms)} VMs and cleaned up networks.")
 
+    @staticmethod
+    def interactive_setup():
+        """Interactive setup mode for easy configuration"""
+        print("=== VM Manager Interactive Setup ===")
+        print("This wizard will help you create a basic VM configuration.")
+        print("Press Enter to accept default values in [brackets].\n")
+        
+        # Basic VM configuration
+        vm_name = input("VM name [ubuntu-vm]: ").strip() or "ubuntu-vm"
+        
+        # CPU configuration
+        print(f"\nCPU cores [2]: ", end="")
+        vcpus = input().strip()
+        try:
+            vcpus = int(vcpus) if vcpus else 2
+        except ValueError:
+            vcpus = 2
+            print("Invalid input, using default: 2")
+        
+        # Memory configuration  
+        print(f"Memory in GB [4]: ", end="")
+        ram_gb = input().strip()
+        try:
+            ram_gb = int(ram_gb) if ram_gb else 4
+        except ValueError:
+            ram_gb = 4
+            print("Invalid input, using default: 4")
+        
+        # Disk configuration
+        print(f"Disk size in GB [20]: ", end="")
+        disk_gb = input().strip()
+        try:
+            disk_gb = int(disk_gb) if disk_gb else 20
+        except ValueError:
+            disk_gb = 20
+            print("Invalid input, using default: 20")
+        
+        # Network configuration
+        print(f"\nNetwork configuration:")
+        print("1. DHCP (automatic IP)")
+        print("2. Static IP")
+        print("Choose network type [1]: ", end="")
+        net_choice = input().strip() or "1"
+        
+        network_config = {}
+        if net_choice == "2":
+            ip_addr = input("Static IP address [192.168.1.100]: ").strip() or "192.168.1.100"
+            gateway = input("Gateway [192.168.1.1]: ").strip() or "192.168.1.1"
+            network_config = {
+                "ip_address": ip_addr,
+                "netmask": "255.255.255.0",
+                "gateway": gateway,
+                "dns_servers": ["8.8.8.8", "1.1.1.1"]
+            }
+        else:
+            network_config = {"dhcp": True}
+        
+        # Start behavior
+        print(f"\nStart VM automatically after creation? [Y/n]: ", end="")
+        auto_start = input().strip().lower()
+        initial_state = "stop" if auto_start in ['n', 'no'] else "start"
+        
+        # Generate configuration
+        config = {
+            "networking": {
+                "mode": "auto"
+            },
+            "storage": {
+                "root_dir": "vms"
+            },
+            "hardware": {
+                "cpu_model": "host-passthrough",
+                "machine_opts": "q35", 
+                "virt_type": "kvm",
+                "fallback_machine_opts": "pc,accel=tcg",
+                "fallback_virt_type": "qemu",
+                "default_initial_state": "start"
+            },
+            "cloud_init": {
+                "timezone": "UTC",
+                "default_user": "ubuntu",
+                "package_update": True,
+                "packages": ["qemu-guest-agent"]
+            },
+            "vms": [{
+                "name": vm_name,
+                "vcpus": vcpus,
+                "ram_gb": ram_gb,
+                "disk_gb": disk_gb,
+                "description": f"Interactive setup VM",
+                "initial_state": initial_state,
+                "network": network_config
+            }],
+            "ssh": {
+                "public_key": ""
+            }
+        }
+        
+        # Show summary
+        print(f"\n=== Configuration Summary ===")
+        print(f"VM Name: {vm_name}")
+        print(f"Resources: {vcpus} CPU cores, {ram_gb}GB RAM, {disk_gb}GB disk")
+        if network_config.get('dhcp'):
+            print(f"Network: DHCP")
+        else:
+            print(f"Network: Static IP {network_config.get('ip_address')}")
+        print(f"Auto-start: {'Yes' if initial_state == 'start' else 'No'}")
+        
+        # Confirm and save
+        print(f"\nSave configuration to vm_config.yaml? [Y/n]: ", end="")
+        save_config = input().strip().lower()
+        
+        if save_config not in ['n', 'no']:
+            import yaml
+            config_path = Path("vm_config.yaml")
+            
+            # Backup existing config
+            if config_path.exists():
+                backup_path = config_path.with_suffix('.yaml.backup')
+                config_path.rename(backup_path)
+                print(f"Existing config backed up to {backup_path}")
+            
+            # Save new config
+            with open(config_path, 'w') as f:
+                yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+            print(f"Configuration saved to {config_path}")
+            
+            # Ask to create VM
+            print(f"\nCreate VM now? [Y/n]: ", end="")
+            create_now = input().strip().lower()
+            
+            if create_now not in ['n', 'no']:
+                return True  # Signal to proceed with VM creation
+        else:
+            print("Configuration not saved.")
+        
+        return False
+
 
 def main():
     """Entry point"""
@@ -1285,6 +1423,11 @@ def main():
         "--force-start",
         action="store_true",
         help="Override config and start all VMs regardless of initial_state setting"
+    )
+    parser.add_argument(
+        "--interactive",
+        action="store_true",
+        help="Interactive setup mode - ask simple questions to create basic configuration"
     )
     
     args = parser.parse_args()
@@ -1363,6 +1506,21 @@ def main():
         except:
             print("User Groups: Unable to check")
         
+        sys.exit(0)
+    
+    # Handle interactive setup mode
+    if args.interactive:
+        try:
+            if VMManager.interactive_setup():
+                # User chose to create VM after setup
+                vm_manager = VMManager(config_file=args.config, no_start=args.no_start, force_start=args.force_start)
+                vm_manager.run(dry_run=args.dry_run)
+        except KeyboardInterrupt:
+            print("\nInteractive setup cancelled by user.")
+            sys.exit(1)
+        except Exception as e:
+            print(f"ERROR during interactive setup: {e}")
+            sys.exit(1)
         sys.exit(0)
     
     # Handle destroy all option

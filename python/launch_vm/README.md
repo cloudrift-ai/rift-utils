@@ -78,6 +78,9 @@ vms:
 
 ### Basic Usage
 ```bash
+# Interactive setup (recommended for beginners)
+./launch_vm.py --interactive
+
 # Use default configuration (vm_config.yaml)
 ./launch_vm.py
 
@@ -87,6 +90,7 @@ vms:
 
 ### Command Line Options
 - `-c, --config`: Path to YAML configuration file
+- `--interactive`: Interactive setup mode - ask simple questions to create basic configuration
 - `--dry-run`: Load and validate configuration without creating VMs
 - `--list-interfaces`: List available network interfaces for bridge configuration
 - `--check-virt`: Check virtualization capabilities and requirements
@@ -110,6 +114,45 @@ vms:
 # Check what would be destroyed (dry run first)
 ./launch_vm.py --dry-run  # Shows which VMs would be created
 ```
+
+## Interactive Mode
+
+The interactive mode provides a simple wizard for creating VM configurations:
+
+```bash
+./launch_vm.py --interactive
+```
+
+### Interactive Setup Example
+```
+=== VM Manager Interactive Setup ===
+This wizard will help you create a basic VM configuration.
+Press Enter to accept default values in [brackets].
+
+VM name [ubuntu-vm]: web-server
+CPU cores [2]: 4
+Memory in GB [4]: 8
+Disk size in GB [20]: 50
+
+Network configuration:
+1. DHCP (automatic IP)
+2. Static IP
+Choose network type [1]: 2
+Static IP address [192.168.1.100]: 192.168.1.200
+Gateway [192.168.1.1]: 
+
+Start VM automatically after creation? [Y/n]: 
+
+=== Configuration Summary ===
+VM Name: web-server
+Resources: 4 CPU cores, 8GB RAM, 50GB disk
+Network: Static IP 192.168.1.200
+Auto-start: Yes
+
+Save configuration to vm_config.yaml? [Y/n]: y
+```
+
+This creates a complete configuration file and optionally starts the VM creation process.
 
 ## Examples
 

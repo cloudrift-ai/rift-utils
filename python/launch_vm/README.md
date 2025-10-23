@@ -6,7 +6,7 @@ A Python-based VM management tool that creates and configures virtual machines u
 
 - **YAML Configuration**: All settings are loaded from `vm_config.yaml`
 - **Multiple VM Support**: Define multiple VMs with different specifications
-- **Flexible Networking**: Supports both libvirt networks and Linux bridges  
+- **Flexible Networking**: Supports libvirt networks, Linux bridges (with auto-creation), and NAT networks  
 - **Cloud-init Integration**: Automatic VM provisioning with SSH keys, packages, and configuration
 - **Image Management**: Automatic download and CoW backing file creation
 - **Error Handling**: Comprehensive validation and error reporting
@@ -39,8 +39,18 @@ sudo dnf install libvirt qemu-kvm virt-install virt-manager cloud-utils
 The script uses `vm_config.yaml` for all configuration. Key sections:
 
 ### Networking
-- `libvirt_net_name`: Preferred libvirt network name
-- `linux_bridge_name`: Fallback Linux bridge name
+
+The networking section supports multiple modes:
+
+- **`mode`**: Network configuration mode
+  - `auto`: Try libvirt → bridge → NAT (default)
+  - `libvirt`: Use existing libvirt network (must exist)
+  - `bridge`: Use Linux bridge (must exist)  
+  - `nat`: Create/use NAT network
+- **`libvirt_net_name`**: Libvirt network name
+- **`linux_bridge_name`**: Linux bridge name (for existing bridges)
+- **`bridge`**: Bridge creation configuration (see Bridge Network section)
+- **`nat`**: NAT network configuration (see NAT Network section)
 
 ### VMs
 Define VMs in the `vms` section:
@@ -75,6 +85,8 @@ vms:
 
 ### Command Line Options
 - `-c, --config`: Path to YAML configuration file
+- `--dry-run`: Load and validate configuration without creating VMs
+- `--list-interfaces`: List available network interfaces for bridge configuration
 - `-h, --help`: Show help message
 
 ### Environment Variables
@@ -105,6 +117,49 @@ storage:
   root_dir: "/var/lib/vms"  # Absolute path
   # or
   root_dir: "custom_vms"    # Relative to home directory
+```
+
+### NAT Network Configuration
+```yaml
+networking:
+  mode: "nat"  # Use NAT network mode
+  nat:
+    network_name: "vm-nat"
+    subnet: "192.168.100.0/24"
+    gateway: "192.168.100.1"
+    dhcp_start: "192.168.100.10"
+    dhcp_end: "192.168.100.100"
+    forward_mode: "nat"  # or "route"
+    forward_dev: ""      # auto-detect if empty
+```
+
+### Bridge Network Configuration
+```yaml
+networking:
+  mode: "bridge"  # Use bridge network mode
+  bridge:
+    bridge_name: "vmbr0"
+    physical_interface: "enp0s3"  # Your actual interface name
+    use_dhcp: true               # Or set static IP below
+    ip_address: ""               # e.g., "192.168.1.100/24"
+    gateway: ""                  # e.g., "192.168.1.1"
+    dns_servers: []              # e.g., ["8.8.8.8", "1.1.1.1"]
+    use_netplan: true            # Use netplan (recommended)
+```
+
+### Mixed Network Setup (Auto Mode)
+```yaml
+networking:
+  mode: "auto"  # Try libvirt → bridge → NAT
+  libvirt_net_name: "bridge"
+  linux_bridge_name: "br0"
+  bridge:
+    bridge_name: "vmbr0"
+    physical_interface: "eth0"
+    use_dhcp: true
+  nat:
+    network_name: "fallback-nat"
+    subnet: "192.168.200.0/24"
 ```
 
 ## VM Management

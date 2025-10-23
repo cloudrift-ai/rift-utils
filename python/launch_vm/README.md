@@ -6,7 +6,7 @@ A Python-based VM management tool that creates and configures virtual machines u
 
 - **YAML Configuration**: All settings are loaded from `vm_config.yaml`
 - **Multiple VM Support**: Define multiple VMs with different specifications
-- **Flexible Networking**: Supports libvirt networks, Linux bridges (with auto-creation), and NAT networks  
+- **Flexible Networking**: Supports libvirt networks, Linux bridges (with auto-creation), macvtap (high performance), and NAT networks  
 - **Cloud-init Integration**: Automatic VM provisioning with SSH keys, packages, and configuration
 - **Image Management**: Automatic download and CoW backing file creation
 - **Error Handling**: Comprehensive validation and error reporting
@@ -43,13 +43,15 @@ The script uses `vm_config.yaml` for all configuration. Key sections:
 The networking section supports multiple modes:
 
 - **`mode`**: Network configuration mode
-  - `auto`: Try libvirt → bridge → NAT (default)
+  - `auto`: Try libvirt → bridge → macvtap → NAT (default)
   - `libvirt`: Use existing libvirt network (must exist)
-  - `bridge`: Use Linux bridge (must exist)  
+  - `bridge`: Use Linux bridge (must exist)
+  - `macvtap`: Use macvtap (high performance direct interface access)
   - `nat`: Create/use NAT network
 - **`libvirt_net_name`**: Libvirt network name
 - **`linux_bridge_name`**: Linux bridge name (for existing bridges)
 - **`bridge`**: Bridge creation configuration (see Bridge Network section)
+- **`macvtap`**: Macvtap configuration (see Macvtap Network section)
 - **`nat`**: NAT network configuration (see NAT Network section)
 
 ### VMs
@@ -147,16 +149,37 @@ networking:
     use_netplan: true            # Use netplan (recommended)
 ```
 
+### Macvtap Network Configuration (High Performance)
+```yaml
+networking:
+  mode: "macvtap"  # Use macvtap for near-native performance
+  macvtap:
+    physical_interface: "enp0s3"  # Physical interface to attach to
+    mode: "bridge"               # bridge, vepa, private, or passthru
+    auto_create: true            # Automatically create macvtap interface
+    interface_prefix: "macvtap"  # Interface name prefix
+```
+
+#### Macvtap Modes
+- **`bridge`**: VMs can communicate with each other and external networks (most common)
+- **`vepa`**: VMs communicate via external switch (VEPA-capable switch required)  
+- **`private`**: VMs isolated from each other and host, external only
+- **`passthru`**: Exclusive access to physical interface (one VM only)
+
 ### Mixed Network Setup (Auto Mode)
 ```yaml
 networking:
-  mode: "auto"  # Try libvirt → bridge → NAT
+  mode: "auto"  # Try libvirt → bridge → macvtap → NAT
   libvirt_net_name: "bridge"
   linux_bridge_name: "br0"
   bridge:
     bridge_name: "vmbr0"
     physical_interface: "eth0"
     use_dhcp: true
+  macvtap:
+    physical_interface: "eth0"
+    mode: "bridge"
+    auto_create: true
   nat:
     network_name: "fallback-nat"
     subnet: "192.168.200.0/24"

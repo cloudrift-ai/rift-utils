@@ -3,8 +3,8 @@
 
 # Networking configuration
 networking:
-  # Network mode: "libvirt", "bridge", or "nat"
-  mode: "bridge"  # Options: libvirt, bridge, nat, auto
+  # Network mode: "libvirt", "bridge", "macvtap", "nat", or "auto"
+  mode: "bridge"  # Options: libvirt, bridge, macvtap, nat, auto
   
   # Libvirt network configuration
   libvirt_net_name: "bridge"
@@ -26,6 +26,17 @@ networking:
     use_dhcp: true
     # Create via netplan (recommended) or manual commands
     use_netplan: true
+  
+  # Macvtap network configuration (high performance, direct physical interface access)
+  macvtap:
+    # Physical interface to create macvtap on
+    physical_interface: "enp3s0"  # Change to your actual interface
+    # Macvtap mode: bridge, vepa, private, or passthru
+    mode: "bridge"               # Most common - allows VM-to-VM and VM-to-external communication
+    # Whether to create macvtap interface automatically
+    auto_create: true
+    # Optional: specific macvtap interface name pattern (will add numbers: macvtap0, macvtap1, etc.)
+    interface_prefix: "macvtap"
   
   # NAT network configuration
   nat:

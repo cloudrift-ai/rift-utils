@@ -52,6 +52,7 @@ class VMManager:
         self.linux_bridge_name = self.config["networking"].get("linux_bridge_name", "br0")
         self.nat_config = self.config["networking"].get("nat", {})
         self.bridge_config = self.config["networking"].get("bridge", {})
+        self.macvtap_config = self.config["networking"].get("macvtap", {})
         
         # Base image configuration
         self.base_img_url = self.config["base_image"]["url"]
@@ -76,6 +77,8 @@ class VMManager:
         
         self.use_libvirt_net = False
         self.use_nat_network = False
+        self.use_macvtap = False
+        self.macvtap_interface = None  # Will be set when macvtap is created
         self.network_type = None  # Will be set by detect_network()
     
     def _load_config(self, config_file: Optional[Path] = None) -> Dict[str, Any]:
@@ -370,6 +373,89 @@ class VMManager:
             print(f"ERROR: Failed to create bridge via commands: {e}")
             sys.exit(1)
     
+    def _create_macvtap_interface(self) -> str:
+        """Create macvtap interface and return its name"""
+        macvtap_config = self.macvtap_config
+        physical_interface = macvtap_config.get("physical_interface", "")
+        mode = macvtap_config.get("mode", "bridge")
+        interface_prefix = macvtap_config.get("interface_prefix", "macvtap")
+        
+        if not physical_interface:
+            print("ERROR: physical_interface must be specified in macvtap configuration")
+            sys.exit(1)
+        
+        # Check if physical interface exists
+        try:
+            self._run_command(
+                ["ip", "link", "show", physical_interface],
+                check=True,
+                capture_output=True
+            )
+        except subprocess.CalledProcessError:
+            print(f"ERROR: Physical interface '{physical_interface}' not found for macvtap")
+            print("Available interfaces:")
+            result = self._run_command(["ip", "link", "show"], check=False, capture_output=True)
+            if result.stdout:
+                for line in result.stdout.splitlines():
+                    if ": " in line and not line.strip().startswith("lo:"):
+                        interface = line.split(":")[1].strip().split("@")[0]
+                        if interface != "lo":
+                            print(f"  - {interface}")
+            sys.exit(1)
+        
+        # Find available macvtap interface name
+        macvtap_interface = None
+        for i in range(100):  # Try up to macvtap99
+            candidate = f"{interface_prefix}{i}"
+            try:
+                self._run_command(
+                    ["ip", "link", "show", candidate],
+                    check=True,
+                    capture_output=True
+                )
+                # Interface exists, try next number
+                continue
+            except subprocess.CalledProcessError:
+                # Interface doesn't exist, we can use this name
+                macvtap_interface = candidate
+                break
+        
+        if not macvtap_interface:
+            print(f"ERROR: Could not find available macvtap interface name (tried {interface_prefix}0-{interface_prefix}99)")
+            sys.exit(1)
+        
+        # Create macvtap interface
+        print(f"[*] Creating macvtap interface '{macvtap_interface}' on '{physical_interface}' in {mode} mode...")
+        
+        try:
+            # Create macvtap interface
+            self._run_command([
+                "sudo", "ip", "link", "add", "link", physical_interface,
+                "name", macvtap_interface, "type", "macvtap", "mode", mode
+            ])
+            
+            # Bring up the interface
+            self._run_command([
+                "sudo", "ip", "link", "set", "dev", macvtap_interface, "up"
+            ])
+            
+            print(f"[*] Macvtap interface '{macvtap_interface}' created successfully")
+            return macvtap_interface
+            
+        except subprocess.CalledProcessError as e:
+            print(f"ERROR: Failed to create macvtap interface: {e}")
+            sys.exit(1)
+    
+    def _cleanup_macvtap_interface(self, interface_name: str) -> None:
+        """Clean up macvtap interface"""
+        try:
+            print(f"[*] Cleaning up macvtap interface '{interface_name}'...")
+            self._run_command([
+                "sudo", "ip", "link", "delete", interface_name
+            ], check=False)  # Don't fail if interface doesn't exist
+        except Exception as e:
+            print(f"[!] Could not clean up macvtap interface '{interface_name}': {e}")
+    
     def _run_command(self, cmd: List[str], check: bool = True, capture_output: bool = False) -> subprocess.CompletedProcess:
         """Run a shell command"""
         try:
@@ -483,8 +569,11 @@ class VMManager:
         elif self.network_mode == "bridge":
             self._setup_bridge_network()
             return
+        elif self.network_mode == "macvtap":
+            self._setup_macvtap_network()
+            return
         
-        # Auto mode - try in order of preference: libvirt -> bridge -> nat
+        # Auto mode - try in order of preference: libvirt -> bridge -> macvtap -> nat
         if self.network_mode == "auto":
             # Try libvirt network first
             if self._try_libvirt_network():
@@ -506,7 +595,18 @@ class VMManager:
                         print(f"[*] Using created Linux bridge: {bridge_name}")
                         return
                     except Exception as e:
-                        print(f"[*] Bridge creation failed: {e}, falling back to NAT")
+                        print(f"[*] Bridge creation failed: {e}, trying macvtap...")
+            
+            # Try macvtap if configured
+            if self.macvtap_config:
+                physical_interface = self.macvtap_config.get("physical_interface", "")
+                if physical_interface:
+                    try:
+                        print(f"[*] Creating macvtap on '{physical_interface}' as configured...")
+                        self._setup_macvtap_network()
+                        return
+                    except Exception as e:
+                        print(f"[*] Macvtap creation failed: {e}, falling back to NAT")
             
             # Fallback to creating NAT network
             print("[*] No existing networks found, creating NAT network as fallback...")
@@ -514,7 +614,7 @@ class VMManager:
             return
         
         # Invalid network mode
-        print(f"ERROR: Invalid network mode '{self.network_mode}'. Valid options: auto, libvirt, bridge, nat")
+        print(f"ERROR: Invalid network mode '{self.network_mode}'. Valid options: auto, libvirt, bridge, macvtap, nat")
         sys.exit(1)
     
     def _setup_nat_network(self) -> None:
@@ -555,6 +655,42 @@ class VMManager:
             print(f"ERROR: Linux bridge '{self.linux_bridge_name}' not found and no bridge configuration provided.")
             print("Either create the bridge manually or add bridge configuration to create it automatically.")
             sys.exit(1)
+    
+    def _setup_macvtap_network(self) -> None:
+        """Set up macvtap network"""
+        if not self.macvtap_config:
+            print("ERROR: Macvtap mode selected but no macvtap configuration provided.")
+            sys.exit(1)
+        
+        # Create macvtap interface if auto_create is enabled
+        auto_create = self.macvtap_config.get("auto_create", True)
+        if auto_create:
+            self.macvtap_interface = self._create_macvtap_interface()
+        else:
+            # User must provide existing macvtap interface name
+            interface_name = self.macvtap_config.get("interface_name", "")
+            if not interface_name:
+                print("ERROR: auto_create is disabled but no interface_name provided in macvtap configuration")
+                sys.exit(1)
+            
+            # Verify the interface exists
+            try:
+                self._run_command(
+                    ["ip", "link", "show", interface_name],
+                    check=True,
+                    capture_output=True
+                )
+                self.macvtap_interface = interface_name
+                print(f"[*] Using existing macvtap interface: {interface_name}")
+            except subprocess.CalledProcessError:
+                print(f"ERROR: Specified macvtap interface '{interface_name}' not found")
+                sys.exit(1)
+        
+        self.use_macvtap = True
+        self.network_type = "macvtap"
+        physical_interface = self.macvtap_config.get("physical_interface", "")
+        mode = self.macvtap_config.get("mode", "bridge")
+        print(f"[*] Using macvtap network: {self.macvtap_interface} -> {physical_interface} (mode: {mode})")
     
     def _try_libvirt_network(self) -> bool:
         """Try to use libvirt network, return True if successful"""
@@ -707,6 +843,13 @@ local-hostname: {vm_config.name}
             virt_install_cmd.extend([
                 "--network", f"network={nat_network_name},model=virtio"
             ])
+        elif self.use_macvtap:
+            # For macvtap, we use the type=direct with the physical interface
+            physical_interface = self.macvtap_config.get("physical_interface", "")
+            mode = self.macvtap_config.get("mode", "bridge")
+            virt_install_cmd.extend([
+                "--network", f"type=direct,source={physical_interface},source_mode={mode},model=virtio"
+            ])
         else:
             virt_install_cmd.extend([
                 "--network", f"bridge={self.linux_bridge_name},model=virtio"
@@ -780,6 +923,11 @@ local-hostname: {vm_config.name}
                 bridge_name = self.bridge_config.get("bridge_name", "vmbr0")
                 physical_if = self.bridge_config.get("physical_interface", "")
                 print(f"    Bridge Config: {bridge_name} -> {physical_if}")
+        if self.network_mode in ["macvtap", "auto"]:
+            if self.macvtap_config:
+                physical_if = self.macvtap_config.get("physical_interface", "")
+                mode = self.macvtap_config.get("mode", "bridge")
+                print(f"    Macvtap Config: {physical_if} (mode: {mode})")
         print(f"    Base Image: {self.base_img_url}")
         print(f"    Storage: {self.root_dir}")
         print(f"    Virtualization: {self.virt_type} ({self.machine_opts})")
@@ -822,6 +970,10 @@ local-hostname: {vm_config.name}
             nat_name = self.nat_config.get("network_name", "vm-nat")
             print(f"   - NAT network info:    virsh net-info {nat_name}")
             print(f"   - NAT DHCP leases:     virsh net-dhcp-leases {nat_name}")
+        if self.use_macvtap:
+            physical_if = self.macvtap_config.get("physical_interface", "")
+            print(f"   - Macvtap interface:   ip link show {physical_if}")
+            print(f"   - Macvtap stats:       ip -s link show {physical_if}")
         print("   - Edit config:         vi vm_config.yaml")
         print("===============================================")
 

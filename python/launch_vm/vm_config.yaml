@@ -4,7 +4,7 @@
 # Networking configuration
 networking:
   # Network mode: "libvirt", "bridge", "macvtap", "nat", or "auto"
-  mode: "bridge"  # Options: libvirt, bridge, macvtap, nat, auto
+  mode: "nat"  # Options: libvirt, bridge, macvtap, nat, auto
   
   # Libvirt network configuration
   libvirt_net_name: "bridge"
@@ -41,7 +41,7 @@ networking:
   # NAT network configuration
   nat:
     # NAT network name (will be created if it doesn't exist)
-    network_name: "vm-nat"
+    network_name: "default"
     # Network subnet (CIDR notation)
     subnet: "192.168.100.0/24"
     # Gateway IP (first usable IP in subnet)
@@ -77,13 +77,15 @@ hardware:
   # Fallback options if KVM fails
   fallback_machine_opts: "pc,accel=tcg"
   fallback_virt_type: "qemu"
+  # Default initial state for VMs: "start" (boot immediately) or "stop" (define only)
+  default_initial_state: "start"
 
 # Cloud-init configuration
 cloud_init:
   # Default timezone for VMs
   timezone: "America/Vancouver"
   # Default user configuration
-  default_user: "ubuntu"
+  default_user: "cloudrift"
   # Package updates and installations
   package_update: true
   packages:
@@ -96,18 +98,43 @@ vms:
     ram_gb: 16
     disk_gb: 50
     description: "API server VM"
+    # Initial state after creation: "start" (default) or "stop" (define only, don't start)
+    initial_state: "start"
+    # Network configuration (optional - uses DHCP if not specified)
+    network:
+      # Static IP configuration
+      ip_address: "10.8.33.101"    # Static IP address
+      netmask: "255.255.255.0"       # or use CIDR: "192.168.1.100/24"  
+      gateway: "10.8.33.97"         # Default gateway
+      dns_servers: ["8.8.8.8", "1.1.1.1"]  # DNS servers
+      # Alternative: use DHCP
+      # dhcp: true
   
-  - name: "web-vm"
+  - name: "console-vm"
     vcpus: 4
     ram_gb: 8
     disk_gb: 20
-    description: "Web server VM"
+    description: "Console VM"
+    # This VM will only be defined, not started automatically
+    initial_state: "stop"
+    network:
+      ip_address: "10.8.33.102"
+      netmask: "255.255.255.0"
+      gateway: "10.8.33.97"
+      dns_servers: ["8.8.8.8", "1.1.1.1"]
   
   - name: "nvidia-lic-vm"
     vcpus: 1
-    ram_gb: 2
+    ram_gb: 4
     disk_gb: 20
     description: "NVIDIA license server VM"
+    # Default is "start" if not specified
+    initial_state: "stop"
+    network:
+      ip_address: "10.8.33.103"
+      netmask: "255.255.255.0"
+      gateway: "10.8.33.97"
+      dns_servers: ["8.8.8.8", "1.1.1.1"]
 
 # SSH configuration
 ssh:

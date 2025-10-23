@@ -91,7 +91,9 @@ vms:
 - `--list-interfaces`: List available network interfaces for bridge configuration
 - `--check-virt`: Check virtualization capabilities and requirements
 - `--destroy-all`: Destroy and cleanup all VMs created by this configuration
-- `--force`: Skip confirmation prompts (use with --destroy-all)  
+- `--force`: Skip confirmation prompts (use with --destroy-all)
+- `--no-start`: Override config and don't start any VMs (define only)
+- `--force-start`: Override config and start all VMs regardless of initial_state setting
 - `-h, --help`: Show help message
 
 ### Environment Variables
@@ -126,6 +128,39 @@ vms:
 ```yaml
 ssh:
   public_key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... your-key"
+```
+
+### VM Initial State Control
+```yaml
+# Global default for all VMs
+hardware:
+  default_initial_state: "start"  # or "stop"
+
+# Per-VM configuration
+vms:
+  - name: "web-server"
+    vcpus: 4
+    ram_gb: 8
+    disk_gb: 50
+    initial_state: "start"    # Start automatically after creation
+    
+  - name: "backup-server"  
+    vcpus: 2
+    ram_gb: 4
+    disk_gb: 100
+    initial_state: "stop"     # Define only, don't start automatically
+```
+
+### Command Line Overrides
+```bash
+# Define all VMs but don't start any (useful for batch operations)
+./launch_vm.py --no-start
+
+# Force start all VMs regardless of their initial_state setting
+./launch_vm.py --force-start
+
+# Check configuration including start behavior
+./launch_vm.py --dry-run --no-start
 ```
 
 ### Custom Storage Location

@@ -34,14 +34,20 @@ class VMConfig:
     ram_gb: int
     disk_gb: int
     description: str = ""
+    network: Optional[Dict[str, Any]] = None
+    initial_state: str = "start"  # "start" or "stop"
 
 
 class VMManager:
     """Manages VM creation and configuration"""
     
-    def __init__(self, config_file: Optional[Path] = None):
+    def __init__(self, config_file: Optional[Path] = None, no_start: bool = False, force_start: bool = False):
         # Load configuration from YAML file
         self.config = self._load_config(config_file)
+        
+        # Store start behavior overrides
+        self.no_start = no_start
+        self.force_start = force_start
         
         # Initialize configuration-dependent attributes
         self.ssh_pubkey = self._get_ssh_pubkey()
@@ -108,13 +114,17 @@ class VMManager:
     def _load_vm_configs(self) -> List[VMConfig]:
         """Load VM configurations from the config file"""
         vm_configs = []
+        default_initial_state = self.config.get("hardware", {}).get("default_initial_state", "start")
+        
         for vm_data in self.config["vms"]:
             vm_config = VMConfig(
                 name=vm_data["name"],
                 vcpus=vm_data["vcpus"],
                 ram_gb=vm_data["ram_gb"],
                 disk_gb=vm_data["disk_gb"],
-                description=vm_data.get("description", "")
+                description=vm_data.get("description", ""),
+                network=vm_data.get("network"),
+                initial_state=vm_data.get("initial_state", default_initial_state)
             )
             vm_configs.append(vm_config)
         return vm_configs
@@ -741,6 +751,84 @@ class VMManager:
         
         return False
     
+    def _generate_network_config(self, vm_config: VMConfig) -> str:
+        """Generate network configuration for cloud-init based on VM config"""
+        # Get network configuration from VM config, if it exists
+        vm_network = getattr(vm_config, 'network', {})
+        
+        # If no network config or using DHCP, use DHCP
+        if not vm_network or vm_network.get('dhcp', False):
+            return """network:
+  version: 2
+  ethernets:
+    ens3:
+      dhcp4: true"""
+        
+        # Check if static IP is configured
+        ip_address = vm_network.get('ip_address')
+        if not ip_address:
+            # No static IP specified, use DHCP
+            return """network:
+  version: 2
+  ethernets:
+    ens3:
+      dhcp4: true"""
+        
+        # Build static IP configuration
+        netmask = vm_network.get('netmask', '255.255.255.0')
+        gateway = vm_network.get('gateway')
+        dns_servers = vm_network.get('dns_servers', ['8.8.8.8', '1.1.1.1'])
+        
+        # Convert netmask to CIDR if needed
+        if '/' not in ip_address and netmask:
+            # Convert netmask to CIDR notation
+            cidr = self._netmask_to_cidr(netmask)
+            ip_address_cidr = f"{ip_address}/{cidr}"
+        elif '/' in ip_address:
+            ip_address_cidr = ip_address
+        else:
+            ip_address_cidr = f"{ip_address}/24"  # Default to /24
+        
+        # Format DNS servers for YAML
+        dns_list = "\n        - ".join(dns_servers)
+        
+        network_config = f"""network:
+  version: 2
+  ethernets:
+    ens3:
+      dhcp4: false
+      addresses:
+        - {ip_address_cidr}"""
+        
+        if gateway:
+            network_config += f"""
+      gateway4: {gateway}"""
+        
+        if dns_servers:
+            network_config += f"""
+      nameservers:
+        addresses:
+        - {dns_list}"""
+        
+        return network_config
+    
+    def _netmask_to_cidr(self, netmask: str) -> int:
+        """Convert netmask to CIDR notation"""
+        netmask_map = {
+            '255.255.255.255': 32, '255.255.255.254': 31, '255.255.255.252': 30,
+            '255.255.255.248': 29, '255.255.255.240': 28, '255.255.255.224': 27,
+            '255.255.255.192': 26, '255.255.255.128': 25, '255.255.255.0': 24,
+            '255.255.254.0': 23, '255.255.252.0': 22, '255.255.248.0': 21,
+            '255.255.240.0': 20, '255.255.224.0': 19, '255.255.192.0': 18,
+            '255.255.128.0': 17, '255.255.0.0': 16, '255.254.0.0': 15,
+            '255.252.0.0': 14, '255.248.0.0': 13, '255.240.0.0': 12,
+            '255.224.0.0': 11, '255.192.0.0': 10, '255.128.0.0': 9,
+            '255.0.0.0': 8, '254.0.0.0': 7, '252.0.0.0': 6,
+            '248.0.0.0': 5, '240.0.0.0': 4, '224.0.0.0': 3,
+            '192.0.0.0': 2, '128.0.0.0': 1, '0.0.0.0': 0
+        }
+        return netmask_map.get(netmask, 24)  # Default to /24 if not found
+
     def create_cloud_init(self, vm_config: VMConfig) -> Path:
         """Create cloud-init configuration for a VM"""
         vmwork = self.vm_dir / vm_config.name
@@ -750,6 +838,9 @@ class VMManager:
         # Create user-data using configuration values
         cloud_init_config = self.config["cloud_init"]
         packages = "\n".join([f"  - {pkg}" for pkg in cloud_init_config["packages"]])
+        
+        # Generate network configuration
+        network_config = self._generate_network_config(vm_config)
         
         user_data = f"""#cloud-config
 hostname: {vm_config.name}
@@ -767,13 +858,7 @@ packages:
 runcmd:
   - [ systemctl, enable, --now, qemu-guest-agent ]
   - [ timedatectl, set-timezone, {cloud_init_config["timezone"]} ]
-# Uncomment and edit if you want static IP (example):
-#network:
-#  version: 2
-#  ethernets:
-#    ens3:
-#      dhcp4: true
-"""
+{network_config}"""
         
         user_data_path = cloudinit_dir / "user-data"
         user_data_path.write_text(user_data)
@@ -897,16 +982,30 @@ local-hostname: {vm_config.name}
             # VM doesn't exist, create it
             self.virt_install_vm(vm_config, base_img_path, disk_path)            
         
-        # Ensure VM is running
-        print(f"[*] Ensuring {vm_config.name} is running...")
-        try:
-            self._run_command(
-                ["sudo", "virsh", "start", vm_config.name], 
-                check=False, 
-                capture_output=True
-            )
-        except subprocess.CalledProcessError:
-            pass  # VM might already be running
+        # Determine whether to start VM based on config and command-line overrides
+        should_start = vm_config.initial_state == "start"
+        
+        if self.force_start:
+            should_start = True
+            reason = "forced via --force-start"
+        elif self.no_start:
+            should_start = False
+            reason = "disabled via --no-start"
+        else:
+            reason = f"initial_state: {vm_config.initial_state}"
+        
+        if should_start:
+            print(f"[*] Starting {vm_config.name} ({reason})...")
+            try:
+                self._run_command(
+                    ["sudo", "virsh", "start", vm_config.name], 
+                    check=False, 
+                    capture_output=True
+                )
+            except subprocess.CalledProcessError:
+                pass  # VM might already be running
+        else:
+            print(f"[*] VM {vm_config.name} defined but not started ({reason})")
     
     def print_config_summary(self) -> None:
         """Print a summary of the loaded configuration"""
@@ -933,10 +1032,32 @@ local-hostname: {vm_config.name}
         print(f"    Storage: {self.root_dir}")
         print(f"    Virtualization: {self.virt_type} ({self.machine_opts})")
         print(f"    CPU Model: {self.cpu_model}")
+        
+        # Show start behavior overrides if active
+        if self.force_start:
+            print("    Start Override: --force-start (all VMs will be started)")
+        elif self.no_start:
+            print("    Start Override: --no-start (no VMs will be started)")
+        
         print(f"    VMs to create: {len(self.vms)}")
         for vm in self.vms:
             desc = f" ({vm.description})" if vm.description else ""
-            print(f"      - {vm.name}: {vm.vcpus}v/{vm.ram_gb}GB RAM/{vm.disk_gb}GB disk{desc}")
+            
+            # Add network info
+            network_info = ""
+            if vm.network:
+                if vm.network.get('dhcp', False):
+                    network_info = " [DHCP]"
+                elif vm.network.get('ip_address'):
+                    ip = vm.network.get('ip_address')
+                    network_info = f" [Static IP: {ip}]"
+            else:
+                network_info = " [DHCP]"  # Default to DHCP if no network config
+            
+            # Add initial state info
+            state_info = f" [Auto-start: {'Yes' if vm.initial_state == 'start' else 'No'}]"
+                
+            print(f"      - {vm.name}: {vm.vcpus}v/{vm.ram_gb}GB RAM/{vm.disk_gb}GB disk{desc}{network_info}{state_info}")
         print()
     
     def run(self, dry_run: bool = False) -> None:
@@ -1155,6 +1276,16 @@ def main():
         action="store_true",
         help="Skip confirmation prompts (use with --destroy-all)"
     )
+    parser.add_argument(
+        "--no-start",
+        action="store_true",
+        help="Override config and don't start any VMs (define only)"
+    )
+    parser.add_argument(
+        "--force-start",
+        action="store_true",
+        help="Override config and start all VMs regardless of initial_state setting"
+    )
     
     args = parser.parse_args()
     
@@ -1248,7 +1379,7 @@ def main():
         sys.exit(0)
     
     try:
-        vm_manager = VMManager(config_file=args.config)
+        vm_manager = VMManager(config_file=args.config, no_start=args.no_start, force_start=args.force_start)
         vm_manager.run(dry_run=args.dry_run)
     except KeyboardInterrupt:
         print("\nOperation cancelled by user.")

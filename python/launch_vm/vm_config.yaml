@@ -1,0 +1,63 @@
+# VM Manager Configuration File
+# This file contains all configuration settings for the VM manager
+
+# Networking configuration
+networking:
+  # Prefer libvirt network "bridge". If missing, use Linux bridge br0.
+  libvirt_net_name: "bridge"
+  linux_bridge_name: "br0"
+
+# Base image configuration (Ubuntu 24.04 LTS – Noble)
+base_image:
+  url: "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
+  os_variant: "ubuntu24.04"
+
+# Storage and working directories
+storage:
+  # Base directory for all VM-related files (relative to user home if not absolute)
+  root_dir: "vms"
+  images_subdir: "images"
+  instances_subdir: "instances"
+
+# VM hardware configuration
+hardware:
+  cpu_model: "host-passthrough"
+  machine_opts: "q35,accel=kvm"
+
+# Cloud-init configuration
+cloud_init:
+  # Default timezone for VMs
+  timezone: "America/Vancouver"
+  # Default user configuration
+  default_user: "ubuntu"
+  # Package updates and installations
+  package_update: true
+  packages:
+    - "qemu-guest-agent"
+
+# VM definitions: each VM with its specifications
+vms:
+  - name: "api-vm"
+    vcpus: 8
+    ram_gb: 16
+    disk_gb: 50
+    description: "API server VM"
+  
+  - name: "web-vm"
+    vcpus: 4
+    ram_gb: 8
+    disk_gb: 20
+    description: "Web server VM"
+  
+  - name: "nvidia-lic-vm"
+    vcpus: 1
+    ram_gb: 2
+    disk_gb: 20
+    description: "NVIDIA license server VM"
+
+# SSH configuration
+ssh:
+  # SSH public key (leave empty to auto-detect from ~/.ssh/id_rsa.pub or SSH_PUBKEY env var)
+  public_key: ""
+  # Alternative: specify path to SSH public key file
+  # public_key_file: "~/.ssh/id_rsa.pub"

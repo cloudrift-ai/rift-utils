@@ -899,8 +899,18 @@ local-hostname: {vm_config.name}
         print(f"[*] Creating cloud-init seed for {vm_config.name}")
         seed_path = self.create_cloud_init(vm_config)
         
+        # Determine if we should start the VM immediately based on initial_state and overrides
+        should_start_now = vm_config.initial_state == "start"
+        if self.force_start:
+            should_start_now = True
+        elif self.no_start:
+            should_start_now = False
+        
         # Build virt-install command
-        print(f"[*] Defining & starting VM {vm_config.name}")
+        if should_start_now:
+            print(f"[*] Defining & starting VM {vm_config.name}")
+        else:
+            print(f"[*] Defining VM {vm_config.name} (not starting)")
         
         virt_install_cmd = [
             "sudo", "virt-install",
@@ -918,6 +928,10 @@ local-hostname: {vm_config.name}
             "--machine", self.machine_opts,
             "--noautoconsole"
         ]
+        
+        # Add --print-xml flag if we don't want to start immediately
+        if not should_start_now:
+            virt_install_cmd.append("--print-xml")
         
         # Add network configuration
         if self.use_libvirt_net:
@@ -942,7 +956,24 @@ local-hostname: {vm_config.name}
             ])
         
         try:
-            self._run_command(virt_install_cmd)
+            if should_start_now:
+                # Normal execution - define and start VM
+                self._run_command(virt_install_cmd)
+            else:
+                # Generate XML and define VM without starting
+                result = self._run_command(virt_install_cmd, capture_output=True)
+                if result and result.stdout:
+                    # Write XML to temporary file and use virsh define
+                    import tempfile
+                    with tempfile.NamedTemporaryFile(mode='w', suffix='.xml', delete=False) as f:
+                        f.write(result.stdout)
+                        xml_file = f.name
+                    
+                    try:
+                        self._run_command(["sudo", "virsh", "define", xml_file])
+                        print(f"[*] VM {vm_config.name} defined successfully (not started)")
+                    finally:
+                        Path(xml_file).unlink()  # Clean up temp file
         except subprocess.CalledProcessError as e:
             if self.virt_type == "kvm" and "domain type" in str(e):
                 print(f"[!] KVM virtualization failed, trying fallback with {self.fallback_virt_type}...")
@@ -959,7 +990,22 @@ local-hostname: {vm_config.name}
                     cpu_index = virt_install_cmd_fallback.index("--cpu") + 1
                     virt_install_cmd_fallback[cpu_index] = "qemu64"
                 
-                self._run_command(virt_install_cmd_fallback)
+                if should_start_now:
+                    self._run_command(virt_install_cmd_fallback)
+                else:
+                    # Handle fallback case for define-only mode
+                    result = self._run_command(virt_install_cmd_fallback, capture_output=True)
+                    if result and result.stdout:
+                        import tempfile
+                        with tempfile.NamedTemporaryFile(mode='w', suffix='.xml', delete=False) as f:
+                            f.write(result.stdout)
+                            xml_file = f.name
+                        
+                        try:
+                            self._run_command(["sudo", "virsh", "define", xml_file])
+                            print(f"[*] VM {vm_config.name} defined successfully (not started)")
+                        finally:
+                            Path(xml_file).unlink()
             else:
                 raise
 
@@ -980,9 +1026,10 @@ local-hostname: {vm_config.name}
             print(f"[*] VM {vm_config.name} already defined. Skipping define.")
         except subprocess.CalledProcessError:
             # VM doesn't exist, create it
-            self.virt_install_vm(vm_config, base_img_path, disk_path)            
+            self.virt_install_vm(vm_config, base_img_path, disk_path)
+            return
         
-        # Determine whether to start VM based on config and command-line overrides
+        # VM already exists, handle start behavior for existing VMs
         should_start = vm_config.initial_state == "start"
         
         if self.force_start:
@@ -995,7 +1042,7 @@ local-hostname: {vm_config.name}
             reason = f"initial_state: {vm_config.initial_state}"
         
         if should_start:
-            print(f"[*] Starting {vm_config.name} ({reason})...")
+            print(f"[*] Starting existing VM {vm_config.name} ({reason})...")
             try:
                 self._run_command(
                     ["sudo", "virsh", "start", vm_config.name], 
@@ -1005,7 +1052,7 @@ local-hostname: {vm_config.name}
             except subprocess.CalledProcessError:
                 pass  # VM might already be running
         else:
-            print(f"[*] VM {vm_config.name} defined but not started ({reason})")
+            print(f"[*] VM {vm_config.name} already defined but not started ({reason})")
     
     def print_config_summary(self) -> None:
         """Print a summary of the loaded configuration"""

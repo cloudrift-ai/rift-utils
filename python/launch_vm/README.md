@@ -89,10 +89,25 @@ vms:
 - `-c, --config`: Path to YAML configuration file
 - `--dry-run`: Load and validate configuration without creating VMs
 - `--list-interfaces`: List available network interfaces for bridge configuration
+- `--check-virt`: Check virtualization capabilities and requirements
+- `--destroy-all`: Destroy and cleanup all VMs created by this configuration
+- `--force`: Skip confirmation prompts (use with --destroy-all)  
 - `-h, --help`: Show help message
 
 ### Environment Variables
 - `SSH_PUBKEY`: Override SSH public key from environment
+
+### VM Cleanup
+```bash
+# Destroy all VMs and cleanup networks (with confirmation)
+./launch_vm.py --destroy-all
+
+# Force destroy without confirmation prompts
+./launch_vm.py --destroy-all --force
+
+# Check what would be destroyed (dry run first)
+./launch_vm.py --dry-run  # Shows which VMs would be created
+```
 
 ## Examples
 

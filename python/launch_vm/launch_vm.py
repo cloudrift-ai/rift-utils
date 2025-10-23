@@ -11,6 +11,7 @@ import subprocess
 import tempfile
 import shutil
 import uuid
+import time
 from pathlib import Path
 from typing import List, Tuple, Dict, Optional, Any
 from dataclasses import dataclass
@@ -977,6 +978,145 @@ local-hostname: {vm_config.name}
         print("   - Edit config:         vi vm_config.yaml")
         print("===============================================")
 
+    def list_created_vms(self):
+        """List all VMs that match our naming convention."""
+        try:
+            result = subprocess.run(['virsh', 'list', '--all', '--name'], 
+                                  capture_output=True, text=True, check=True)
+            all_vms = [vm.strip() for vm in result.stdout.split('\n') if vm.strip()]
+            
+            # Filter VMs that match our naming convention from the config
+            created_vms = []
+            for vm_config in self.config.get('vms', []):
+                vm_name = vm_config.get('name')
+                if vm_name and vm_name in all_vms:
+                    created_vms.append(vm_name)
+            
+            return created_vms
+        except subprocess.CalledProcessError as e:
+            print(f"Failed to list VMs: {e}")
+            return []
+    
+    def destroy_vm(self, vm_name):
+        """Destroy a single VM and its associated resources."""
+        print(f"Destroying VM: {vm_name}")
+        
+        # First, try to shutdown gracefully, then force destroy
+        try:
+            subprocess.run(['virsh', 'shutdown', vm_name], 
+                         capture_output=True, text=True, check=False)
+            # Wait a moment for graceful shutdown
+            time.sleep(5)
+        except:
+            pass
+        
+        # Force destroy if still running
+        try:
+            subprocess.run(['virsh', 'destroy', vm_name], 
+                         capture_output=True, text=True, check=False)
+        except:
+            pass
+        
+        # Undefine the domain
+        try:
+            result = subprocess.run(['virsh', 'undefine', vm_name, '--remove-all-storage'], 
+                                  capture_output=True, text=True, check=False)
+            if result.returncode == 0:
+                print(f"Successfully undefined VM: {vm_name}")
+            else:
+                print(f"Warning: Failed to undefine VM {vm_name}: {result.stderr}")
+        except Exception as e:
+            print(f"Error undefining VM {vm_name}: {e}")
+    
+    def cleanup_networks(self):
+        """Clean up networks created by this configuration."""
+        networking = self.config.get('networking', {})
+        
+        # Cleanup libvirt networks
+        if networking.get('mode') == 'libvirt':
+            network_name = networking.get('libvirt_network', 'default')
+            if network_name != 'default':  # Don't destroy the default network
+                self.cleanup_libvirt_network(network_name)
+        
+        # Cleanup bridge networks
+        elif networking.get('mode') == 'bridge':
+            bridge_name = networking.get('bridge_name')
+            if bridge_name:
+                self.cleanup_bridge_network(bridge_name)
+        
+        # Cleanup NAT networks
+        elif networking.get('mode') == 'nat':
+            nat_config = networking.get('nat', {})
+            network_name = nat_config.get('name', 'vm-nat')
+            if network_name != 'default':  # Don't destroy the default network
+                self.cleanup_libvirt_network(network_name)
+    
+    def cleanup_libvirt_network(self, network_name):
+        """Remove a libvirt network."""
+        try:
+            # Check if network exists
+            result = subprocess.run(['virsh', 'net-list', '--all'], 
+                                  capture_output=True, text=True, check=True)
+            if network_name not in result.stdout:
+                print(f"Network {network_name} does not exist")
+                return
+            
+            # Destroy and undefine network
+            subprocess.run(['virsh', 'net-destroy', network_name], 
+                         capture_output=True, text=True, check=False)
+            subprocess.run(['virsh', 'net-undefine', network_name], 
+                         capture_output=True, text=True, check=False)
+            print(f"Cleaned up libvirt network: {network_name}")
+        except Exception as e:
+            print(f"Warning: Failed to cleanup network {network_name}: {e}")
+    
+    def cleanup_bridge_network(self, bridge_name):
+        """Remove a bridge network."""
+        try:
+            # Check if bridge exists
+            result = subprocess.run(['ip', 'link', 'show', bridge_name], 
+                                  capture_output=True, text=True, check=False)
+            if result.returncode != 0:
+                print(f"Bridge {bridge_name} does not exist")
+                return
+            
+            # Bring down and delete bridge
+            subprocess.run(['sudo', 'ip', 'link', 'set', bridge_name, 'down'], 
+                         capture_output=True, text=True, check=False)
+            subprocess.run(['sudo', 'brctl', 'delbr', bridge_name], 
+                         capture_output=True, text=True, check=False)
+            print(f"Cleaned up bridge network: {bridge_name}")
+        except Exception as e:
+            print(f"Warning: Failed to cleanup bridge {bridge_name}: {e}")
+    
+    def destroy_all_vms(self, force=False):
+        """Destroy all VMs and cleanup associated resources."""
+        created_vms = self.list_created_vms()
+        
+        if not created_vms:
+            print("No VMs found matching the configuration.")
+            return
+        
+        print(f"Found {len(created_vms)} VMs to destroy:")
+        for vm in created_vms:
+            print(f"  - {vm}")
+        
+        if not force:
+            response = input("\nAre you sure you want to destroy ALL these VMs? (yes/no): ")
+            if response.lower() not in ['yes', 'y']:
+                print("Operation cancelled.")
+                return
+        
+        print(f"\nDestroying {len(created_vms)} VMs...")
+        for vm_name in created_vms:
+            self.destroy_vm(vm_name)
+        
+        # Cleanup networks
+        print("\nCleaning up networks...")
+        self.cleanup_networks()
+        
+        print(f"\nCleanup completed. Destroyed {len(created_vms)} VMs and cleaned up networks.")
+
 
 def main():
     """Entry point"""
@@ -1004,6 +1144,16 @@ def main():
         "--check-virt",
         action="store_true",
         help="Check virtualization capabilities and requirements"
+    )
+    parser.add_argument(
+        "--destroy-all",
+        action="store_true",
+        help="Destroy and cleanup all VMs created by this configuration"
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Skip confirmation prompts (use with --destroy-all)"
     )
     
     args = parser.parse_args()
@@ -1082,6 +1232,19 @@ def main():
         except:
             print("User Groups: Unable to check")
         
+        sys.exit(0)
+    
+    # Handle destroy all option
+    if args.destroy_all:
+        try:
+            vm_manager = VMManager(config_file=args.config)
+            vm_manager.destroy_all_vms(force=args.force)
+        except KeyboardInterrupt:
+            print("\nOperation cancelled by user.")
+            sys.exit(1)
+        except Exception as e:
+            print(f"ERROR: {e}")
+            sys.exit(1)
         sys.exit(0)
     
     try:

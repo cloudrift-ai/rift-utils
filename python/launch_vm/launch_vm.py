@@ -842,16 +842,33 @@ class VMManager:
         # Generate network configuration
         network_config = self._generate_network_config(vm_config)
         
-        user_data = f"""#cloud-config
-hostname: {vm_config.name}
-manage_etc_hosts: true
-users:
-  - name: {cloud_init_config["default_user"]}
+        # Build user configuration
+        user_config = f"""  - name: {cloud_init_config["default_user"]}
     groups: [sudo]
     sudo: ALL=(ALL) NOPASSWD:ALL
     shell: /bin/bash
     ssh_authorized_keys:
-      - {self.ssh_pubkey}
+      - {self.ssh_pubkey}"""
+        
+        # Add password configuration if set
+        password = cloud_init_config.get("password", "")
+        if password:
+            user_config += f"\n    plain_text_passwd: {password}"
+            lock_password = cloud_init_config.get("lock_password", False)
+            user_config += f"\n    lock_passwd: {str(lock_password).lower()}"
+        else:
+            # If no password is set, lock password authentication
+            user_config += "\n    lock_passwd: true"
+        
+        # SSH password authentication setting
+        ssh_pwauth = cloud_init_config.get("ssh_pwauth", False)
+        
+        user_data = f"""#cloud-config
+hostname: {vm_config.name}
+manage_etc_hosts: true
+users:
+{user_config}
+ssh_pwauth: {str(ssh_pwauth).lower()}
 package_update: {str(cloud_init_config["package_update"]).lower()}
 packages:
 {packages}
@@ -1366,6 +1383,9 @@ local-hostname: {vm_config.name}
             "cloud_init": {
                 "timezone": "UTC",
                 "default_user": "ubuntu",
+                "password": "",
+                "lock_password": False,
+                "ssh_pwauth": False,
                 "package_update": True,
                 "packages": ["qemu-guest-agent"]
             },

@@ -86,6 +86,17 @@ cloud_init:
   timezone: "America/Vancouver"
   # Default user configuration
   default_user: "cloudrift"
+  # Password configuration (optional)
+  # If set, allows password authentication in addition to SSH key
+  # Password should be a plain text password (will be hashed by cloud-init)
+  # Leave empty to disable password authentication
+  password: ""
+  # Lock password after first login (recommended for security)
+  # If true, password login is disabled after initial setup
+  lock_password: false
+  # Allow password authentication via SSH (not recommended, use SSH keys instead)
+  # If false, only SSH key authentication is allowed
+  ssh_pwauth: false
   # Package updates and installations
   package_update: true
   packages:

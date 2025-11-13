@@ -1,6 +1,6 @@
 # VM Manager - Python Version
 
-A Python-based VM management tool that creates and configures virtual machines using libvirt and cloud-init. This is the Python version of `launch_vm.sh` with YAML-based configuration.
+A Python-based VM management tool that creates and configures virtual machines using libvirt and cloud-init.
 
 ## Features
 

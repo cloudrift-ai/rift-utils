@@ -1,0 +1,155 @@
+# VM Manager Configuration File
+# This file contains all configuration settings for the VM manager
+
+# Networking configuration
+networking:
+  # Network mode: "libvirt", "bridge", "macvtap", "nat", or "auto"
+  mode: "nat"  # Options: libvirt, bridge, macvtap, nat, auto
+  
+  # Libvirt network configuration
+  libvirt_net_name: "bridge"
+  
+  # Linux bridge configuration  
+  linux_bridge_name: "br0"
+  
+  # Bridge network configuration (for auto-creation)
+  bridge:
+    # Bridge name (will be created if it doesn't exist)
+    bridge_name: "vmbr0"
+    # Physical interface to bridge to (required for bridge creation)
+    physical_interface: "enp3s0"  # Change to your actual interface (e.g., enp0s3, wlan0)
+    # Bridge IP configuration (optional - can use DHCP instead)
+    ip_address: ""              # Static IP for bridge (e.g., "192.168.1.100/24")
+    gateway: ""                 # Gateway IP (e.g., "192.168.1.1")
+    dns_servers: []             # DNS servers (e.g., ["8.8.8.8", "1.1.1.1"])
+    # Use DHCP for bridge IP (if ip_address is empty)
+    use_dhcp: true
+    # Create via netplan (recommended) or manual commands
+    use_netplan: true
+  
+  # Macvtap network configuration (high performance, direct physical interface access)
+  macvtap:
+    # Physical interface to create macvtap on
+    physical_interface: "enp3s0"  # Change to your actual interface
+    # Macvtap mode: bridge, vepa, private, or passthru
+    mode: "bridge"               # Most common - allows VM-to-VM and VM-to-external communication
+    # Whether to create macvtap interface automatically
+    auto_create: true
+    # Optional: specific macvtap interface name pattern (will add numbers: macvtap0, macvtap1, etc.)
+    interface_prefix: "macvtap"
+  
+  # NAT network configuration
+  nat:
+    # NAT network name (will be created if it doesn't exist)
+    network_name: "default"
+    # Network subnet (CIDR notation)
+    subnet: "192.168.100.0/24"
+    # Gateway IP (first usable IP in subnet)
+    gateway: "192.168.100.1"
+    # DHCP range
+    dhcp_start: "192.168.100.10"
+    dhcp_end: "192.168.100.100"
+    # Forward mode: "nat" or "route"
+    forward_mode: "nat"
+    # Physical interface to forward through (optional, auto-detected if empty)
+    forward_dev: ""
+
+# Base image configuration (Ubuntu 24.04 LTS – Noble)
+base_image:
+  # url: "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
+  # os_variant: "ubuntu24.04"
+  url: "https://cloud.debian.org/images/cloud/bookworm/20251006-2257/debian-12-generic-amd64-20251006-2257.qcow2"
+  os_variant: "debian12"
+
+# Storage and working directories
+storage:
+  # Base directory for all VM-related files (relative to user home if not absolute)
+  root_dir: "vms"
+  images_subdir: "images"
+  instances_subdir: "instances"
+
+# VM hardware configuration
+hardware:
+  cpu_model: "host-passthrough"
+  machine_opts: "q35"
+  # Virtualization type: kvm, qemu, or auto-detect
+  virt_type: "kvm"
+  # Fallback options if KVM fails
+  fallback_machine_opts: "pc,accel=tcg"
+  fallback_virt_type: "qemu"
+  # Default initial state for VMs: "start" (boot immediately) or "stop" (define only)
+  default_initial_state: "start"
+
+# Cloud-init configuration
+cloud_init:
+  # Default timezone for VMs
+  timezone: "America/Vancouver"
+  # Default user configuration
+  default_user: "cloudrift"
+  # Password configuration (optional)
+  # If set, allows password authentication in addition to SSH key
+  # Password should be a plain text password (will be hashed by cloud-init)
+  # Leave empty to disable password authentication
+  password: ""
+  # Lock password after first login (recommended for security)
+  # If true, password login is disabled after initial setup
+  lock_password: false
+  # Allow password authentication via SSH (not recommended, use SSH keys instead)
+  # If false, only SSH key authentication is allowed
+  ssh_pwauth: false
+  # Package updates and installations
+  package_update: true
+  packages:
+    - "qemu-guest-agent"
+
+# VM definitions: each VM with its specifications
+vms:
+  - name: "api-vm"
+    vcpus: 8
+    ram_gb: 16
+    disk_gb: 50
+    description: "API server VM"
+    # Initial state after creation: "start" (default) or "stop" (define only, don't start)
+    initial_state: "start"
+    # Network configuration (optional - uses DHCP if not specified)
+    network:
+      # Static IP configuration
+      ip_address: "10.8.33.101"    # Static IP address
+      netmask: "255.255.255.0"       # or use CIDR: "192.168.1.100/24"  
+      gateway: "10.8.33.97"         # Default gateway
+      dns_servers: ["8.8.8.8", "1.1.1.1"]  # DNS servers
+      # Alternative: use DHCP
+      # dhcp: true
+  
+  - name: "console-vm"
+    vcpus: 4
+    ram_gb: 8
+    disk_gb: 20
+    description: "Console VM"
+    # This VM will only be defined, not started automatically
+    initial_state: "stop"
+    network:
+      ip_address: "10.8.33.102"
+      netmask: "255.255.255.0"
+      gateway: "10.8.33.97"
+      dns_servers: ["8.8.8.8", "1.1.1.1"]
+  
+  - name: "nvidia-lic-vm"
+    vcpus: 1
+    ram_gb: 4
+    disk_gb: 20
+    description: "NVIDIA license server VM"
+    # Default is "start" if not specified
+    initial_state: "stop"
+    network:
+      ip_address: "10.8.33.103"
+      netmask: "255.255.255.0"
+      gateway: "10.8.33.97"
+      dns_servers: ["8.8.8.8", "1.1.1.1"]
+
+# SSH configuration
+ssh:
+  # SSH public key (leave empty to auto-detect from ~/.ssh/id_rsa.pub or SSH_PUBKEY env var)
+  public_key: ""
+  # Alternative: specify path to SSH public key file
+  # public_key_file: "~/.ssh/id_rsa.pub"

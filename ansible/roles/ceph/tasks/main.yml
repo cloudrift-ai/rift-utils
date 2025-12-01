@@ -1,0 +1,26 @@
+---
+- name: Update apt cache
+  apt:
+    update_cache: yes
+    cache_valid_time: 3600
+
+- name: Install Ceph packages
+  apt:
+    name: "{{ ceph_packages }}"
+    state: present
+
+- name: Create Ceph configuration directory
+  file:
+    path: /etc/ceph
+    state: directory
+    mode: '0755'
+
+- name: Check if Ceph configuration exists
+  stat:
+    path: /etc/ceph/ceph.conf
+  register: ceph_conf
+
+- name: Notify about Ceph configuration
+  debug:
+    msg: "WARNING: /etc/ceph/ceph.conf not found. You need to copy your Ceph cluster configuration and keyring files."
+  when: not ceph_conf.stat.exists

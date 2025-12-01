@@ -1,0 +1,8 @@
+---
+# Default variables for Ceph role
+ceph_packages:
+  - ceph-common
+
+ceph_config_dir: /etc/ceph
+ceph_conf_file: "{{ ceph_config_dir }}/ceph.conf"
+ceph_keyring_file: "{{ ceph_config_dir }}/ceph.client.admin.keyring"

@@ -1,0 +1,8 @@
+---
+- name: Install virsh/libvirt dependencies for Ceph volume binding
+  hosts: virsh_hosts
+  become: yes
+  
+  roles:
+    - ceph
+    - libvirt

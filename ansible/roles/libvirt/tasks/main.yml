@@ -1,0 +1,11 @@
+---
+- name: Install libvirt packages
+  apt:
+    name: "{{ libvirt_packages }}"
+    state: present
+
+- name: Ensure libvirtd service is enabled and started
+  systemd:
+    name: libvirtd
+    enabled: yes
+    state: started

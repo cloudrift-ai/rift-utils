@@ -1,0 +1,23 @@
+---
+galaxy_info:
+  author: CloudRift AI
+  description: Install and configure Ceph client dependencies for virsh/libvirt
+  company: CloudRift AI
+  license: MIT
+  min_ansible_version: 2.9
+  platforms:
+    - name: Ubuntu
+      versions:
+        - focal
+        - jammy
+    - name: Debian
+      versions:
+        - buster
+        - bullseye
+  galaxy_tags:
+    - ceph
+    - storage
+    - rbd
+    - libvirt
+
+dependencies: []

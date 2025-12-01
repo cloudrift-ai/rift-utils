@@ -1,0 +1,9 @@
+---
+# Default variables for libvirt role
+libvirt_packages:
+  - qemu-kvm
+  - qemu-block-extra
+  - libvirt-daemon-system
+  - libvirt-daemon-driver-storage-rbd
+
+libvirt_service_name: libvirtd

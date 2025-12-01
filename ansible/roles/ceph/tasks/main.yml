@@ -15,12 +15,15 @@
     state: directory
     mode: '0755'
 
-- name: Check if Ceph configuration exists
-  stat:
-    path: /etc/ceph/ceph.conf
-  register: ceph_conf
+- name: Create Ceph configuration file
+  template:
+    src: ceph.conf.j2
+    dest: "{{ ceph_conf_file }}"
+    mode: '0644'
+  when: ceph_fsid != "" and ceph_mon_hosts | length > 0
 
-- name: Notify about Ceph configuration
-  debug:
-    msg: "WARNING: /etc/ceph/ceph.conf not found. You need to copy your Ceph cluster configuration and keyring files."
-  when: not ceph_conf.stat.exists
+- name: Create Ceph client keyring file
+  template:
+    src: ceph.keyring.j2
+    dest: "{{ ceph_keyring_file }}"
+    mode: '0600'

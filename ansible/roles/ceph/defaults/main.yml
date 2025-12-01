@@ -5,4 +5,10 @@ ceph_packages:
 
 ceph_config_dir: /etc/ceph
 ceph_conf_file: "{{ ceph_config_dir }}/ceph.conf"
-ceph_keyring_file: "{{ ceph_config_dir }}/ceph.client.admin.keyring"
+ceph_keyring_file: "{{ ceph_config_dir }}/ceph.{{ ceph_client_name }}.keyring"
+
+# Ceph cluster configuration
+ceph_fsid: ""
+ceph_mon_hosts: []
+ceph_client_name: "client.admin"
+ceph_client_key: ""

@@ -60,6 +60,14 @@ This role generates:
 - `/etc/ceph/ceph.{{ ceph_client_name }}.keyring` - Client authentication keyring (mode 0600)
   - Default: `/etc/ceph/ceph.client.admin.keyring`
 
+## Sanity Checks
+
+After configuration, this role performs connectivity checks:
+- `ceph status` - Verifies cluster connectivity and displays cluster health
+- `rbd ls` - Verifies RBD connectivity and lists available images
+
+These checks will warn if connectivity fails but won't stop the playbook execution.
+
 ## License
 
 MIT

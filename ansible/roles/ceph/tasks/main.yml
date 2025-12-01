@@ -27,3 +27,34 @@
     src: ceph.keyring.j2
     dest: "{{ ceph_keyring_file }}"
     mode: '0600'
+
+- name: Verify Ceph cluster connectivity
+  command: ceph status
+  register: ceph_status
+  changed_when: false
+  ignore_errors: true
+
+- name: Display Ceph cluster status
+  debug:
+    var: ceph_status.stdout_lines
+    verbosity: 2
+  when: ceph_status.rc == 0
+  tags: [never, debug]
+
+- name: Verify RBD connectivity
+  command: rbd ls
+  register: rbd_ls
+  changed_when: false
+  ignore_errors: true
+
+- name: Display RBD pools
+  debug:
+    msg: "RBD connectivity verified. Available images: {{ rbd_ls.stdout_lines | length }}"
+    verbosity: 1
+  when: rbd_ls.rc == 0
+  tags: [never, debug]
+
+- name: Fail if Ceph connectivity check failed
+  fail:
+    msg: "ERROR: Unable to connect to Ceph cluster. Check configuration and network connectivity."
+  when: ceph_status.rc != 0 or rbd_ls.rc != 0

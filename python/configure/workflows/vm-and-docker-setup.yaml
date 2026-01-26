@@ -23,6 +23,7 @@ commands:
   - name: "AddGrubVirtualizationOptionsCmd"
   - name: "UpdateInitramfsModulesCmd"
   - name: "CreateVfioConfCmd"
+  - name: "CreateNvidiaNoDrmConfCmd"
   - name: "ConfigureGpuPowerCmd"
   - name: "ConfigureMemoryCmd"
   - name: "ConfigureDisksCmd"

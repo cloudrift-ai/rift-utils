@@ -197,11 +197,31 @@ class AddGrubVirtualizationOptionsCmd(BaseCmd):
         pci_ids = env['GPU_PCI_IDS']
 
         new_options = [
+            # Enables IOMMU passthrough mode for better performance; devices not
+            # requiring translation bypass the IOMMU, reducing latency
             'iommu=pt',
+            # Fixes PCI BAR allocation failures when GPUs have large memory regions
+            # that conflict with other device address ranges.
+            # Note: Often unnecessary on kernels 5.4+; try removing if no BAR issues
             'pci=realloc',
+            # Disables PCIe Active State Power Management; prevents GPU reset failures
+            # and power state transition issues during passthrough.
+            # Note: May be unnecessary on modern hardware/BIOS; try removing first
             'pcie_aspm=off',
+            # Disables Advanced Error Reporting; prevents kernel log floods from
+            # non-fatal errors reported by passed-through devices.
+            # Note: Masks errors rather than fixing them; only use if seeing AER spam
+            'pci=noaer',
+            # Enables IOMMU (Intel VT-d or AMD-Vi); required for device isolation
+            # and secure memory access in GPU passthrough.
+            # Note: AMD IOMMU is often enabled by default on newer kernels (5.15+)
             iommu_type,
+            # Prevents host kernel from initializing GPU framebuffer; avoids conflicts
+            # when the GPU is meant to be passed through to a VM
             'nomodeset',
+            # Disables EFI framebuffer on the GPU; prevents the host from claiming
+            # the GPU's display output before VFIO can bind to it.
+            # Note: May be unnecessary if vfio-pci binds early via modprobe config
             'video=efifb:off'
         ]
 

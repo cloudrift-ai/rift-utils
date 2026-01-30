@@ -2,6 +2,7 @@ name: "VM and Docker Configuration"
 description: "A workflow for configuring both virtual machine and Docker environments."
 
 commands:
+  - name: "RemoveCrontabCmd"
   - name: "CheckVirtualizationCmd"
   - name: "AptInstallCmd"
     environment:

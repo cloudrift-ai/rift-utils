@@ -2,6 +2,7 @@ name: "VM-Only Configuration"
 description: "A workflow for configuring a virtual machine environment."
 
 commands:
+  - name: "RemoveCrontabCmd"
   - name: "CheckVirtualizationCmd"
   - name: "RemoveNvidiaDriverCmd"
   - name: "AptInstallCmd"

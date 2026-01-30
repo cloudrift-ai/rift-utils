@@ -21,6 +21,8 @@ commands:
   - name: "GetIommuTypeCmd"
   - name: "GetGpuPciIdsCmd"
   - name: "AddGrubVirtualizationOptionsCmd"
+    environment:
+      skip_vfio_binding: true
   - name: "UpdateInitramfsModulesCmd"
   - name: "CreateVfioConfCmd"
   - name: "CreateNvidiaNoDrmConfCmd"

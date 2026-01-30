@@ -195,6 +195,7 @@ class AddGrubVirtualizationOptionsCmd(BaseCmd):
 
         iommu_type = env['IOMMU_TYPE']
         pci_ids = env['GPU_PCI_IDS']
+        skip_vfio_binding = env.get('skip_vfio_binding', False)
 
         new_options = [
             # Enables IOMMU passthrough mode for better performance; devices not
@@ -225,12 +226,15 @@ class AddGrubVirtualizationOptionsCmd(BaseCmd):
             'video=efifb:off'
         ]
 
-        vfio_ids_str = ','.join(pci_ids)
-        if vfio_ids_str:
-            new_options.append(f'vfio-pci.ids={vfio_ids_str}')
-            new_options.append('modprobe.blacklist=nouveau,nvidia,nvidiafb,snd_hda_intel')
+        if not skip_vfio_binding:
+            vfio_ids_str = ','.join(pci_ids)
+            if vfio_ids_str:
+                new_options.append(f'vfio-pci.ids={vfio_ids_str}')
+                new_options.append('modprobe.blacklist=nouveau,nvidia,nvidiafb,snd_hda_intel')
+            else:
+                print("Warning: No PCI IDs provided for VFIO binding. Skipping VFIO options.")
         else:
-            print("Warning: No PCI IDs provided for VFIO binding. Skipping VFIO options.")
+            print("Skipping VFIO binding and nvidia blacklist (skip_vfio_binding=True).")
 
         # Only add options that are not already present
         grub_cmdline = env['GRUB_CMDLINE_LINUX_DEFAULT']
@@ -249,9 +253,11 @@ class AddGrubVirtualizationOptionsCmd(BaseCmd):
         # We remove the old ones if they exist and add our new, complete ones
         final_options_list = [opt for opt in final_options_list if not opt.startswith('vfio-pci.ids=')]
         final_options_list = [opt for opt in final_options_list if not opt.startswith('modprobe.blacklist=')]
-        if vfio_ids_str:
-            final_options_list.append(f'vfio-pci.ids={vfio_ids_str}')
-            final_options_list.append('modprobe.blacklist=nouveau,nvidia,nvidiafb,snd_hda_intel')
+        if not skip_vfio_binding:
+            vfio_ids_str = ','.join(pci_ids)
+            if vfio_ids_str:
+                final_options_list.append(f'vfio-pci.ids={vfio_ids_str}')
+                final_options_list.append('modprobe.blacklist=nouveau,nvidia,nvidiafb,snd_hda_intel')
 
         env['GRUB_CMDLINE_LINUX_DEFAULT'] = ' '.join(final_options_list)
         print(f"Updated GRUB_CMDLINE_LINUX_DEFAULT: {env['GRUB_CMDLINE_LINUX_DEFAULT']}")

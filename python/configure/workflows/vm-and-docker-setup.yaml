@@ -2,6 +2,7 @@ name: "VM and Docker Configuration"
 description: "A workflow for configuring both virtual machine and Docker environments."
 
 commands:
+  - name: "RemoveCrontabCmd"
   - name: "CheckVirtualizationCmd"
   - name: "AptInstallCmd"
     environment:
@@ -21,6 +22,8 @@ commands:
   - name: "GetIommuTypeCmd"
   - name: "GetGpuPciIdsCmd"
   - name: "AddGrubVirtualizationOptionsCmd"
+    environment:
+      skip_vfio_binding: true
   - name: "UpdateInitramfsModulesCmd"
   - name: "CreateVfioConfCmd"
   - name: "CreateNvidiaNoDrmConfCmd"
